@@ -16,28 +16,7 @@
  */
 package com.alipay.sofa.jraft.rhea;
 
-import com.alipay.sofa.jraft.rhea.cmd.store.BaseRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BaseResponse;
-import com.alipay.sofa.jraft.rhea.cmd.store.CASAllRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BatchDeleteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BatchPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.CompareAndPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ContainsKeyRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.DeleteRangeRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.DeleteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetAndPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetSequenceRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.KeyLockRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.KeyUnlockRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.MergeRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.MultiGetRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.NodeExecuteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.PutIfAbsentRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.PutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.RangeSplitRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ResetSequenceRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ScanRequest;
+import com.alipay.sofa.jraft.rhea.cmd.store.*;
 import com.alipay.sofa.jraft.rhea.metadata.RegionEpoch;
 
 /**
@@ -171,4 +150,10 @@ public interface RegionKVService {
      */
     void handleCompareAndPutAll(final CASAllRequest request,
                                 final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure);
+
+    void handleWatchRequest(final WatchRequest request,
+                            final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure);
+
+    void handleUnwatchRequest(final UnwatchRequest request,
+                              final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure);
 }

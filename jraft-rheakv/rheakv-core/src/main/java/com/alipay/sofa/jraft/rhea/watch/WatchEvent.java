@@ -14,22 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alipay.sofa.jraft.rhea.storage;
+package com.alipay.sofa.jraft.rhea.watch;
 
-/**
- * @author jiachun.fjc
- */
-public enum SstColumnFamily {
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
-    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3), WATCH(4);
+import java.util.concurrent.CountDownLatch;
 
-    private final int value;
-
-    SstColumnFamily(int value) {
-        this.value = value;
-    }
-
-    public int getValue() {
-        return value;
-    }
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class WatchEvent {
+    private byte[]    key;
+    private byte[]    preValue;
+    private byte[]    value;
+    private EventType eventType;
 }

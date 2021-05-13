@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
+import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,6 +148,15 @@ public abstract class AbstractPlacementDriverClient implements PlacementDriverCl
             refreshRouteTable();
         }
         return this.regionRouteTable.findRegionsByKvEntries(kvEntries);
+    }
+
+    @Override
+    public Map<Region, List<WatchEntry>> findRegionsByWatchEntries(final List<WatchEntry> watchEntries,
+                                                                   final boolean forceRefresh) {
+        if (forceRefresh) {
+            refreshRouteTable();
+        }
+        return this.regionRouteTable.findRegionsByWatchEntries(watchEntries);
     }
 
     @Override

@@ -29,6 +29,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.alipay.sofa.jraft.rhea.options.WatchOptions;
+import com.alipay.sofa.jraft.rhea.watch.WatchService;
+import com.alipay.sofa.jraft.rhea.watch.WatchServiceImpl;
 import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -197,6 +200,10 @@ public class KVStateMachineTest {
 
         private int putIndex = 0;
 
+        public MockKVStore(WatchService watchService) {
+            super(watchService);
+        }
+
         @Override
         public void put(byte[] key, byte[] value, KVStoreClosure closure) {
             if (this.putIndex++ < SUCCESS_COUNT) {
@@ -245,7 +252,10 @@ public class KVStateMachineTest {
 
     static class MockStoreEngine extends StoreEngine {
 
-        private final MockKVStore     mockKVStore        = new MockKVStore();
+        // init watch listener
+        private final WatchService    watchService       = new WatchServiceImpl(new WatchOptions());
+
+        private final MockKVStore     mockKVStore        = new MockKVStore(null);
         private final ExecutorService leaderStateTrigger = Executors.newSingleThreadExecutor();
 
         public MockStoreEngine() {

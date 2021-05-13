@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.alipay.sofa.jraft.rhea.watch.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,11 +68,13 @@ public class KVStoreStateMachine extends StateMachineAdapter {
     private final KVStoreSnapshotFile storeSnapshotFile;
     private final Meter               applyMeter;
     private final Histogram           batchWriteHistogram;
+    private final WatchService        watchService;
 
     public KVStoreStateMachine(Region region, StoreEngine storeEngine) {
         this.region = region;
         this.storeEngine = storeEngine;
         this.rawKVStore = storeEngine.getRawKVStore();
+        this.watchService = storeEngine.getWatchService();
         this.storeSnapshotFile = KVStoreSnapshotFileFactory.getKVStoreSnapshotFile(this.rawKVStore);
         final String regionStr = String.valueOf(this.region.getId());
         this.applyMeter = KVMetrics.meter(STATE_MACHINE_APPLY_QPS, regionStr);
@@ -218,6 +221,12 @@ public class KVStoreStateMachine extends StateMachineAdapter {
             case KVOperation.RANGE_SPLIT:
                 doSplit(kvStates);
                 break;
+            case KVOperation.WATCH:
+                doWatch(kvStates);
+                break;
+            case KVOperation.UNWATCH:
+                doUnwatch(kvStates);
+                break;
             default:
                 throw new IllegalKVOperationException("Unknown operation: " + opType);
         }
@@ -244,6 +253,23 @@ public class KVStoreStateMachine extends StateMachineAdapter {
                     BytesUtil.toHex(splitKey));
                 setCriticalError(closure, t);
             }
+        }
+    }
+
+    private void doWatch(final KVStateOutputList kvStates) {
+        for (final KVState kvState : kvStates) {
+            final KVOperation op = kvState.getOp();
+            byte[] key = op.getKey();
+            WatchListener listener = op.getListener();
+            watchService.addListener(key, listener);
+        }
+    }
+
+    private void doUnwatch(final KVStateOutputList kvStates) {
+        for (final KVState kvState : kvStates) {
+            final KVOperation op = kvState.getOp();
+            byte[] key = op.getKey();
+            watchService.removeListener(key);
         }
     }
 

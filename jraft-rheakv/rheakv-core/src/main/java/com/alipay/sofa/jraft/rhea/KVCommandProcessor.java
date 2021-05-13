@@ -18,29 +18,7 @@ package com.alipay.sofa.jraft.rhea;
 
 import java.util.concurrent.Executor;
 
-import com.alipay.sofa.jraft.rhea.cmd.store.BaseRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BaseResponse;
-import com.alipay.sofa.jraft.rhea.cmd.store.CASAllRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BatchDeleteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BatchPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.CompareAndPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ContainsKeyRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.DeleteRangeRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.DeleteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetAndPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetSequenceRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.KeyLockRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.KeyUnlockRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.MergeRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.MultiGetRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.NoRegionFoundResponse;
-import com.alipay.sofa.jraft.rhea.cmd.store.NodeExecuteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.PutIfAbsentRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.PutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.RangeSplitRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ResetSequenceRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ScanRequest;
+import com.alipay.sofa.jraft.rhea.cmd.store.*;
 import com.alipay.sofa.jraft.rhea.errors.Errors;
 import com.alipay.sofa.jraft.rhea.errors.RheaRuntimeException;
 import com.alipay.sofa.jraft.rpc.RpcContext;
@@ -135,6 +113,12 @@ public class KVCommandProcessor<T extends BaseRequest> implements RpcProcessor<T
                 break;
             case BaseRequest.COMPARE_PUT_ALL:
                 regionKVService.handleCompareAndPutAll((CASAllRequest) request, closure);
+                break;
+            case BaseRequest.WATCH:
+                regionKVService.handleWatchRequest((WatchRequest) request, closure);
+                break;
+            case BaseRequest.UNWATCH:
+                regionKVService.handleUnwatchRequest((UnwatchRequest) request, closure);
                 break;
             default:
                 throw new RheaRuntimeException("Unsupported request type: " + request.getClass().getName());

@@ -14,22 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alipay.sofa.jraft.rhea.storage;
+package com.alipay.sofa.jraft.rhea.watch;
 
-/**
- * @author jiachun.fjc
- */
-public enum SstColumnFamily {
+import com.alipay.sofa.jraft.Lifecycle;
+import com.alipay.sofa.jraft.rhea.options.WatchOptions;
 
-    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3), WATCH(4);
+import java.io.File;
+import java.util.List;
+import java.util.Map;
 
-    private final int value;
+public interface WatchService extends Lifecycle<WatchOptions> {
+    // listener api
+    void addListener(byte[] key, WatchListener listener);
 
-    SstColumnFamily(int value) {
-        this.value = value;
-    }
+    void addListeners(Map<byte[], WatchListener> listeners);
 
-    public int getValue() {
-        return value;
-    }
+    void removeListener(byte[] key);
+
+    Map<byte[], WatchListener> getListeners();
+
+    // append event
+    void appendEvent(WatchEvent event);
+
+    void appendEvents(List<WatchEvent> events);
+
+    // snapshot api
+    void writeToFile(File file) throws Exception;
+
+    void readFromFile(File file) throws Exception;
+
+    void join() throws InterruptedException;
 }

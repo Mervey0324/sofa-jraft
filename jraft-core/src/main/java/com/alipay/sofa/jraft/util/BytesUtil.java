@@ -103,6 +103,13 @@ public final class BytesUtil {
         return getDefaultByteArrayComparator().compare(a, b) < 0 ? a : b;
     }
 
+    public static byte[] mergeBytes(byte[] data1, byte[] data2) {
+        byte[] result = new byte[data1.length + data2.length];
+        System.arraycopy(data1, 0, result, 0, data1.length);
+        System.arraycopy(data2, 0, result, data1.length, data2.length);
+        return result;
+    }
+
     public interface ByteArrayComparator extends Comparator<byte[]>, Serializable {
 
         int compare(final byte[] buffer1, final int offset1, final int length1, final byte[] buffer2,

@@ -33,6 +33,7 @@ import com.alipay.sofa.jraft.rhea.storage.KVEntry;
 import com.alipay.sofa.jraft.rhea.storage.Sequence;
 import com.alipay.sofa.jraft.rhea.util.ByteArray;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 
 /**
  * User layer KV store api.
@@ -750,4 +751,51 @@ public interface RheaKVStore extends Lifecycle<RheaKVStoreOptions> {
      * then regionId = -1 as the input parameter.
      */
     void addStateListener(final long regionId, final StateListener listener);
+
+    /**
+     * Set the WatchListener entry for "key" to "listener".
+     *
+     * @param key   the specified key to be inserted.
+     * @param listener the listener associated with the specified key.
+     * @return {@code true} if success.
+     */
+    CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener);
+
+    /**
+     * @see #watch(byte[], WatchListener)
+     */
+    CompletableFuture<Boolean> watch(final String key, final WatchListener listener);
+
+    /**
+     * @see #watch(byte[], WatchListener)
+     */
+    Boolean bWatch(final byte[] key, final WatchListener listener);
+
+    /**
+     * @see #watch(byte[], WatchListener)
+     */
+    Boolean bWatch(final String key, final WatchListener listener);
+
+    /**
+     * remove the WatchListener entry for "key".
+     *
+     * @param key   the specified key to be inserted.
+     * @return {@code true} if success.
+     */
+    CompletableFuture<Boolean> unwatch(final byte[] key);
+
+    /**
+     * @see #unwatch(byte[])
+     */
+    CompletableFuture<Boolean> unwatch(final String key);
+
+    /**
+     * @see #unwatch(byte[])
+     */
+    Boolean bUnwatch(final byte[] key);
+
+    /**
+     * @see #unwatch(byte[])
+     */
+    Boolean bUnwatch(final String key);
 }

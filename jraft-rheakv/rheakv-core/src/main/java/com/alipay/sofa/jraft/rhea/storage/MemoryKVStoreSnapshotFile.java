@@ -35,6 +35,7 @@ import com.alipay.sofa.jraft.rhea.util.ByteArray;
 import com.alipay.sofa.jraft.rhea.util.Pair;
 import com.alipay.sofa.jraft.rhea.util.RegionHelper;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import com.alipay.sofa.jraft.util.Bits;
 
 import static com.alipay.sofa.jraft.entity.LocalFileMetaOutter.LocalFileMeta;
@@ -149,6 +150,16 @@ public class MemoryKVStoreSnapshotFile extends AbstractKVStoreSnapshotFile {
     static class LockerDB extends Persistence<Map<ByteArray, DistributedLock.Owner>> {
 
         public LockerDB(Map<ByteArray, DistributedLock.Owner> data) {
+            super(data);
+        }
+    }
+
+    /**
+     * The data of watch info
+     */
+    static class WatchDB extends Persistence<Map<byte[], WatchListener>> {
+
+        public WatchDB(Map<byte[], WatchListener> data) {
             super(data);
         }
     }

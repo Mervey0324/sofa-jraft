@@ -19,12 +19,7 @@ package com.alipay.sofa.jraft.rhea.storage;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +29,9 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 
+import com.alipay.sofa.jraft.rhea.watch.EventType;
+import com.alipay.sofa.jraft.rhea.watch.WatchEvent;
+import com.alipay.sofa.jraft.rhea.watch.WatchService;
 import org.apache.commons.io.FileUtils;
 import org.rocksdb.BackupEngine;
 import org.rocksdb.BackupInfo;
@@ -125,6 +123,15 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
     private WriteOptions                       writeOptions;
     private DebugStatistics                    statistics;
     private RocksStatisticsCollector           statisticsCollector;
+
+    private WatchService                       watchService;
+
+    public RocksRawKVStore(WatchService watchService) {
+        this.watchService = watchService;
+    }
+
+    public RocksRawKVStore() {
+    }
 
     @Override
     public boolean init(final RocksDBOptions opts) {
@@ -468,7 +475,12 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
+            byte[] preVal = this.db.get(key);
             this.db.put(this.writeOptions, key, value);
+
+            // append watch event
+            this.watchService.appendEvent(new WatchEvent(key, preVal, value, EventType.PUT));
+
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [PUT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -494,11 +506,15 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         try {
             Partitions.manyToOne(kvStates, MAX_BATCH_WRITE_SIZE, (Function<List<KVState>, Void>) segment -> {
                 try (final WriteBatch batch = new WriteBatch()) {
+                    List<WatchEvent> events = new ArrayList<>();
                     for (final KVState kvState : segment) {
                         final KVOperation op = kvState.getOp();
+                        events.add(new WatchEvent(op.getKey(), this.db.get(op.getKey()), op.getValue(), EventType.PUT));
                         batch.put(op.getKey(), op.getValue());
                     }
                     this.db.write(this.writeOptions, batch);
+                    this.watchService.appendEvents(events);
+
                     for (final KVState kvState : segment) {
                         setSuccess(kvState.getDone(), Boolean.TRUE);
                     }
@@ -522,6 +538,10 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         try {
             final byte[] prevVal = this.db.get(key);
             this.db.put(this.writeOptions, key, value);
+
+            // append watch event
+            this.watchService.appendEvent(new WatchEvent(key, prevVal, value, EventType.PUT));
+
             setSuccess(closure, prevVal);
         } catch (final Exception e) {
             LOG.error("Fail to [GET_PUT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -548,15 +568,26 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             Partitions.manyToOne(kvStates, MAX_BATCH_WRITE_SIZE, (Function<List<KVState>, Void>) segment -> {
                 try (final WriteBatch batch = new WriteBatch()) {
                     final List<byte[]> keys = Lists.newArrayListWithCapacity(segment.size());
+                    Map<byte[], byte[]> valMap = new HashMap<>();
                     for (final KVState kvState : segment) {
                         final KVOperation op = kvState.getOp();
                         final byte[] key = op.getKey();
                         keys.add(key);
                         batch.put(key, op.getValue());
+                        valMap.put(key, op.getValue());
                     }
                     // first, get prev values
                     final Map<byte[], byte[]> prevValMap = this.db.multiGet(keys);
                     this.db.write(this.writeOptions, batch);
+
+                    // append watch events
+                    List<WatchEvent> events = new ArrayList<>(keys.size());
+                    for (Map.Entry<byte[], byte[]> entry : valMap.entrySet()) {
+                        events.add(new WatchEvent(entry.getKey(), prevValMap.get(entry.getKey()),
+                                entry.getValue(), EventType.PUT));
+                    }
+                    this.watchService.appendEvents(events);
+
                     for (final KVState kvState : segment) {
                         setSuccess(kvState.getDone(), prevValMap.get(kvState.getOp().getKey()));
                     }
@@ -582,6 +613,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             final byte[] actual = this.db.get(key);
             if (Arrays.equals(expect, actual)) {
                 this.db.put(this.writeOptions, key, update);
+                this.watchService.appendEvent(new WatchEvent(key, actual, update, EventType.PUT));
                 setSuccess(closure, Boolean.TRUE);
             } else {
                 setSuccess(closure, Boolean.FALSE);
@@ -621,10 +653,12 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                         updates.put(key, update);
                     }
                     final Map<byte[], byte[]> prevValMap = this.db.multiGet(Lists.newArrayList(expects.keySet()));
+                    List<WatchEvent> events = new ArrayList<>();
                     for (final KVState kvState : segment) {
                         final byte[] key = kvState.getOp().getKey();
                         if (Arrays.equals(expects.get(key), prevValMap.get(key))) {
                             batch.put(key, updates.get(key));
+                            events.add(new WatchEvent(key, prevValMap.get(key), updates.get(key), EventType.PUT));
                             setData(kvState.getDone(), Boolean.TRUE);
                         } else {
                             setData(kvState.getDone(), Boolean.FALSE);
@@ -632,6 +666,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                     }
                     if (batch.count() > 0) {
                         this.db.write(this.writeOptions, batch);
+                        this.watchService.appendEvents(events);
                     }
                     for (final KVState kvState : segment) {
                         setSuccess(kvState.getDone(), getData(kvState.getDone()));
@@ -706,11 +741,19 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Timer.Context timeCtx = getTimeContext("PUT_LIST");
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
+        List<byte[]> keys = new ArrayList<>();
+        Map<byte[], byte[]> valMap = new HashMap<>();
         try (final WriteBatch batch = new WriteBatch()) {
             for (final KVEntry entry : entries) {
                 batch.put(entry.getKey(), entry.getValue());
+                keys.add(entry.getKey());
+                valMap.put(entry.getKey(), entry.getValue());
             }
+            Map<byte[], byte[]> preValMap = this.db.multiGet(keys);
             this.db.write(this.writeOptions, batch);
+            List<WatchEvent> events = new ArrayList<>();
+            keys.forEach(key -> events.add(new WatchEvent(key, preValMap.get(key), valMap.get(key), EventType.PUT)));
+            this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Failed to [PUT_LIST], [size = {}], {}.", entries.size(), StackTraceUtil.stackTrace(e));
@@ -739,11 +782,14 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                 }
             }
 
+            List<WatchEvent> events = new ArrayList<>();
             for (final CASEntry entry : entries) {
                 batch.put(entry.getKey(), entry.getUpdate());
+                events.add(new WatchEvent(entry.getKey(), entry.getExpect(), entry.getUpdate(), EventType.PUT));
             }
             if (batch.count() > 0) {
                 this.db.write(this.writeOptions, batch);
+                this.watchService.appendEvents(events);
             }
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
@@ -764,6 +810,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             final byte[] prevVal = this.db.get(key);
             if (prevVal == null) {
                 this.db.put(this.writeOptions, key, value);
+                this.watchService.appendEvent(new WatchEvent(key, null, value, EventType.PUT));
             }
             setSuccess(closure, prevVal);
         } catch (final Exception e) {
@@ -800,16 +847,19 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                         values.put(key, value);
                     }
                     final Map<byte[], byte[]> prevValMap = this.db.multiGet(keys);
+                    List<WatchEvent> events = new ArrayList<>();
                     for (final KVState kvState : segment) {
                         final byte[] key = kvState.getOp().getKey();
                         final byte[] prevVal = prevValMap.get(key);
                         if (prevVal == null) {
                             batch.put(key, values.get(key));
+                            events.add(new WatchEvent(key, null, values.get(key), EventType.PUT));
                         }
                         setData(kvState.getDone(), prevVal);
                     }
                     if (batch.count() > 0) {
                         this.db.write(this.writeOptions, batch);
+                        this.watchService.appendEvents(events);
                     }
                     for (final KVState kvState : segment) {
                         setSuccess(kvState.getDone(), getData(kvState.getDone()));
@@ -1100,7 +1150,9 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
+            byte[] preVal = this.db.get(key);
             this.db.delete(this.writeOptions, key);
+            this.watchService.appendEvent(new WatchEvent(key, preVal, null, EventType.DELETE));
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [DELETE], [{}], {}.", BytesUtil.toHex(key), StackTraceUtil.stackTrace(e));
@@ -1124,10 +1176,15 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         try {
             Partitions.manyToOne(kvStates, MAX_BATCH_WRITE_SIZE, (Function<List<KVState>, Void>) segment -> {
                 try (final WriteBatch batch = new WriteBatch()) {
+                    List<WatchEvent> events = new ArrayList<>();
                     for (final KVState kvState : segment) {
-                        batch.delete(kvState.getOp().getKey());
+                        byte[] key = kvState.getOp().getKey();
+                        byte[] preVal = this.db.get(key);
+                        batch.delete(key);
+                        events.add(new WatchEvent(key, preVal, null, EventType.DELETE));
                     }
                     this.db.write(this.writeOptions, batch);
+                    this.watchService.appendEvents(events);
                     for (final KVState kvState : segment) {
                         setSuccess(kvState.getDone(), Boolean.TRUE);
                     }
@@ -1150,7 +1207,15 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
+            List<WatchEvent> events = new ArrayList<>();
+            RocksIterator iterator = this.db.newIterator();
+            iterator.seek(startKey);
+            while (Arrays.compare(startKey, iterator.key()) >= 0 && Arrays.compare(endKey, iterator.key()) <= 0) {
+                events.add(new WatchEvent(iterator.key(), iterator.value(), null, EventType.DELETE));
+                iterator.next();
+            }
             this.db.deleteRange(this.writeOptions, startKey, endKey);
+            this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [DELETE_RANGE], ['[{}, {})'], {}.", BytesUtil.toHex(startKey), BytesUtil.toHex(endKey),
@@ -1168,10 +1233,14 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try (final WriteBatch batch = new WriteBatch()) {
+            List<WatchEvent> events = new ArrayList<>();
+            Map<byte[], byte[]> preValMap = this.db.multiGet(keys);
             for (final byte[] key : keys) {
                 batch.delete(key);
+                events.add(new WatchEvent(key, preValMap.get(key), null, EventType.DELETE));
             }
             this.db.write(this.writeOptions, batch);
+            this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Failed to [DELETE_LIST], [size = {}], {}.", keys.size(), StackTraceUtil.stackTrace(e));
@@ -1343,35 +1412,43 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                     final SstColumnFamily sstColumnFamily = entry.getKey();
                     final File sstFile = entry.getValue();
                     final ColumnFamilyHandle columnFamilyHandle = findColumnFamilyHandle(sstColumnFamily);
-                    try (final RocksIterator it = this.db.newIterator(columnFamilyHandle, readOptions);
-                            final SstFileWriter sstFileWriter = new SstFileWriter(envOptions, options)) {
-                        if (startKey == null) {
-                            it.seekToFirst();
-                        } else {
-                            it.seek(startKey);
+                    if (columnFamilyHandle == null) {
+                        try {
+                            watchService.writeToFile(sstFile);
+                        } catch (final Exception e) {
+                            throw new StorageException("Fail to create sst file at path: " + sstFile, e);
                         }
-                        sstFileWriter.open(sstFile.getAbsolutePath());
-                        long count = 0;
-                        for (;;) {
-                            if (!it.isValid()) {
-                                break;
+                    } else {
+                        try (final RocksIterator it = this.db.newIterator(columnFamilyHandle, readOptions);
+                                final SstFileWriter sstFileWriter = new SstFileWriter(envOptions, options)) {
+                            if (startKey == null) {
+                                it.seekToFirst();
+                            } else {
+                                it.seek(startKey);
                             }
-                            final byte[] key = it.key();
-                            if (endKey != null && BytesUtil.compare(key, endKey) >= 0) {
-                                break;
+                            sstFileWriter.open(sstFile.getAbsolutePath());
+                            long count = 0;
+                            for (;;) {
+                                if (!it.isValid()) {
+                                    break;
+                                }
+                                final byte[] key = it.key();
+                                if (endKey != null && BytesUtil.compare(key, endKey) >= 0) {
+                                    break;
+                                }
+                                sstFileWriter.put(key, it.value());
+                                ++count;
+                                it.next();
                             }
-                            sstFileWriter.put(key, it.value());
-                            ++count;
-                            it.next();
+                            if (count == 0) {
+                                sstFileWriter.close();
+                            } else {
+                                sstFileWriter.finish();
+                            }
+                            LOG.info("Finish sst file {} with {} keys.", sstFile, count);
+                        } catch (final RocksDBException e) {
+                            throw new StorageException("Fail to create sst file at path: " + sstFile, e);
                         }
-                        if (count == 0) {
-                            sstFileWriter.close();
-                        } else {
-                            sstFileWriter.finish();
-                        }
-                        LOG.info("Finish sst file {} with {} keys.", sstFile, count);
-                    } catch (final RocksDBException e) {
-                        throw new StorageException("Fail to create sst file at path: " + sstFile, e);
                     }
                 }
                 future.complete(null);
@@ -1398,15 +1475,24 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                 final SstColumnFamily sstColumnFamily = entry.getKey();
                 final File sstFile = entry.getValue();
                 final ColumnFamilyHandle columnFamilyHandle = findColumnFamilyHandle(sstColumnFamily);
-                try (final IngestExternalFileOptions ingestOptions = new IngestExternalFileOptions()) {
-                    if (FileUtils.sizeOf(sstFile) == 0L) {
-                        return;
+                if (columnFamilyHandle == null) {
+                    try {
+                        this.watchService.readFromFile(sstFile);
+                    } catch (final Exception e) {
+                        throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
                     }
-                    final String filePath = sstFile.getAbsolutePath();
-                    LOG.info("Start ingest sst file {}.", filePath);
-                    this.db.ingestExternalFile(columnFamilyHandle, Collections.singletonList(filePath), ingestOptions);
-                } catch (final RocksDBException e) {
-                    throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
+                } else {
+                    try (final IngestExternalFileOptions ingestOptions = new IngestExternalFileOptions()) {
+                        if (FileUtils.sizeOf(sstFile) == 0L) {
+                            return;
+                        }
+                        final String filePath = sstFile.getAbsolutePath();
+                        LOG.info("Start ingest sst file {}.", filePath);
+                        this.db.ingestExternalFile(columnFamilyHandle, Collections.singletonList(filePath),
+                            ingestOptions);
+                    } catch (final RocksDBException e) {
+                        throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
+                    }
                 }
             }
         } finally {
@@ -1432,8 +1518,9 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             final BackupInfo backupInfo = Collections.max(backupInfoList, Comparator.comparingInt(BackupInfo::backupId));
             final RocksDBBackupInfo rocksBackupInfo = new RocksDBBackupInfo(backupInfo);
             LOG.info("Backup rocksDB into {} with backupInfo {}.", backupDBPath, rocksBackupInfo);
+            this.watchService.writeToFile(Paths.get(backupDBPath, "watch."+backupInfo.backupId()).toFile());
             return rocksBackupInfo;
-        } catch (final RocksDBException e) {
+        } catch (final Exception e) {
             throw new StorageException("Fail to backup at path: " + backupDBPath, e);
         } finally {
             writeLock.unlock();
@@ -1454,7 +1541,8 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             LOG.info("Restored rocksDB from {} with {}.", backupDBPath, rocksBackupInfo);
             // reopen the db
             openRocksDB(this.opts);
-        } catch (final RocksDBException e) {
+            this.watchService.readFromFile(Paths.get(backupDBPath, "watch." + rocksBackupInfo.getBackupId()).toFile());
+        } catch (final Exception e) {
             throw new StorageException("Fail to restore from path: " + backupDBPath, e);
         } finally {
             writeLock.unlock();
@@ -1476,6 +1564,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             if (!tempFile.renameTo(snapshotFile)) {
                 throw new StorageException("Fail to rename [" + tempPath + "] to [" + snapshotPath + "].");
             }
+            this.watchService.writeToFile(Paths.get(snapshotPath + ".watch").toFile());
         } catch (final StorageException e) {
             throw e;
         } catch (final Exception e) {
@@ -1505,6 +1594,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             }
             // reopen the db
             openRocksDB(this.opts);
+            this.watchService.readFromFile(Paths.get(snapshotPath + ".watch").toFile());
         } catch (final Exception e) {
             throw new StorageException("Fail to read snapshot from path: " + snapshotPath, e);
         } finally {
@@ -1573,6 +1663,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         sstFileTable.put(SstColumnFamily.SEQUENCE, Paths.get(path, "sequence.sst").toFile());
         sstFileTable.put(SstColumnFamily.LOCKING, Paths.get(path, "locking.sst").toFile());
         sstFileTable.put(SstColumnFamily.FENCING, Paths.get(path, "fencing.sst").toFile());
+        sstFileTable.put(SstColumnFamily.WATCH, Paths.get(path, "watch.sst").toFile());
         return sstFileTable;
     }
 
@@ -1586,6 +1677,8 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                 return this.lockingHandle;
             case FENCING:
                 return this.fencingHandle;
+            case WATCH:
+                return null;
             default:
                 throw new IllegalArgumentException("illegal sstColumnFamily: " + sstColumnFamily.name());
         }

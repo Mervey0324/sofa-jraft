@@ -14,22 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alipay.sofa.jraft.rhea.storage;
+package com.alipay.sofa.jraft.rhea.cmd.store;
 
 /**
+ *
  * @author jiachun.fjc
  */
-public enum SstColumnFamily {
+public class UnwatchResponse extends BaseResponse<Boolean> {
 
-    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3), WATCH(4);
-
-    private final int value;
-
-    SstColumnFamily(int value) {
-        this.value = value;
-    }
-
-    public int getValue() {
-        return value;
-    }
+    private static final long serialVersionUID = 4041608778755970883L;
 }

@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -367,6 +368,16 @@ public class RaftRawKVStore implements RawKVStore {
     @Override
     public void delete(final List<byte[]> keys, final KVStoreClosure closure) {
         applyOperation(KVOperation.createDeleteList(keys), closure);
+    }
+
+    @Override
+    public void watch(final byte[] key, final WatchListener listener, final KVStoreClosure closure) {
+        applyOperation(KVOperation.createWatch(key, listener), closure);
+    }
+
+    @Override
+    public void unwatch(final byte[] key, final KVStoreClosure closure) {
+        applyOperation(KVOperation.createUnwatch(key), closure);
     }
 
     @Override

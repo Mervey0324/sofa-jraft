@@ -19,30 +19,14 @@ package com.alipay.sofa.jraft.rhea.storage;
 import java.util.List;
 
 import com.alipay.sofa.jraft.rhea.metrics.KVMetrics;
+import com.alipay.sofa.jraft.rhea.serialization.Serializers;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
+import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import com.codahale.metrics.Timer;
 
 import static com.alipay.sofa.jraft.rhea.metrics.KVMetricNames.RPC_REQUEST_HANDLE_TIMER;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.COMPARE_PUT;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.COMPARE_PUT_ALL;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.CONTAINS_KEY;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.DELETE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.DELETE_LIST;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.DELETE_RANGE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.GET;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.GET_PUT;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.GET_SEQUENCE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.KEY_LOCK;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.KEY_LOCK_RELEASE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.MERGE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.MULTI_GET;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.NODE_EXECUTE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.PUT;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.PUT_IF_ABSENT;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.PUT_LIST;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.RESET_SEQUENCE;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.REVERSE_SCAN;
-import static com.alipay.sofa.jraft.rhea.storage.KVOperation.SCAN;
+import static com.alipay.sofa.jraft.rhea.storage.KVOperation.*;
 
 /**
  *
@@ -258,6 +242,18 @@ public class MetricsRawKVStore implements RawKVStore {
     public void delete(final List<byte[]> keys, final KVStoreClosure closure) {
         final KVStoreClosure c = metricsAdapter(closure, DELETE_LIST, keys.size(), 0);
         this.rawKVStore.delete(keys, c);
+    }
+
+    @Override
+    public void watch(byte[] key, WatchListener listener, KVStoreClosure closure) {
+        final KVStoreClosure c = metricsAdapter(closure, WATCH, 1, key.length);
+        this.rawKVStore.watch(key, listener, c);
+    }
+
+    @Override
+    public void unwatch(byte[] key, KVStoreClosure closure) {
+        final KVStoreClosure c = metricsAdapter(closure, UNWATCH, 1, key.length);
+        this.rawKVStore.unwatch(key, c);
     }
 
     @Override

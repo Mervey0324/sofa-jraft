@@ -24,6 +24,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+import com.alipay.sofa.jraft.rhea.cmd.store.*;
+import com.alipay.sofa.jraft.rhea.serialization.Serializers;
+import com.alipay.sofa.jraft.rhea.storage.*;
+import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,25 +54,6 @@ import com.alipay.sofa.jraft.rhea.client.failover.impl.MapFailoverFuture;
 import com.alipay.sofa.jraft.rhea.client.pd.FakePlacementDriverClient;
 import com.alipay.sofa.jraft.rhea.client.pd.PlacementDriverClient;
 import com.alipay.sofa.jraft.rhea.client.pd.RemotePlacementDriverClient;
-import com.alipay.sofa.jraft.rhea.cmd.store.CASAllRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BatchDeleteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.BatchPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.CompareAndPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ContainsKeyRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.DeleteRangeRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.DeleteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetAndPutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.GetSequenceRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.KeyLockRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.KeyUnlockRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.MergeRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.MultiGetRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.NodeExecuteRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.PutIfAbsentRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.PutRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ResetSequenceRequest;
-import com.alipay.sofa.jraft.rhea.cmd.store.ScanRequest;
 import com.alipay.sofa.jraft.rhea.errors.ApiExceptionHelper;
 import com.alipay.sofa.jraft.rhea.errors.Errors;
 import com.alipay.sofa.jraft.rhea.errors.ErrorsHelper;
@@ -81,13 +67,6 @@ import com.alipay.sofa.jraft.rhea.options.RheaKVStoreOptions;
 import com.alipay.sofa.jraft.rhea.options.RpcOptions;
 import com.alipay.sofa.jraft.rhea.options.StoreEngineOptions;
 import com.alipay.sofa.jraft.rhea.rpc.ExtSerializerSupports;
-import com.alipay.sofa.jraft.rhea.storage.CASEntry;
-import com.alipay.sofa.jraft.rhea.storage.KVEntry;
-import com.alipay.sofa.jraft.rhea.storage.KVIterator;
-import com.alipay.sofa.jraft.rhea.storage.KVStoreClosure;
-import com.alipay.sofa.jraft.rhea.storage.NodeExecutor;
-import com.alipay.sofa.jraft.rhea.storage.RawKVStore;
-import com.alipay.sofa.jraft.rhea.storage.Sequence;
 import com.alipay.sofa.jraft.rhea.util.ByteArray;
 import com.alipay.sofa.jraft.rhea.util.Constants;
 import com.alipay.sofa.jraft.rhea.util.Lists;
@@ -1491,6 +1470,170 @@ public class DefaultRheaKVStore implements RheaKVStore {
         }
     }
 
+    @Override
+    public CompletableFuture<Boolean> watch(byte[] key, WatchListener listener) {
+        Requires.requireNonNull(key, "key");
+        Requires.requireNonNull(listener, "listener");
+        return watch(key, listener, new CompletableFuture<>(), false);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> watch(String key, WatchListener listener) {
+        return watch(BytesUtil.writeUtf8(key), listener);
+    }
+
+    @Override
+    public Boolean bWatch(byte[] key, WatchListener listener) {
+        return FutureHelper.get(watch(key, listener), this.futureTimeoutMillis);
+    }
+
+    @Override
+    public Boolean bWatch(String key, WatchListener listener) {
+        return FutureHelper.get(watch(key, listener), this.futureTimeoutMillis);
+    }
+
+    private CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener,
+                                             final CompletableFuture<Boolean> future, final boolean tryBatching) {
+        checkState();
+        // TODO batching watch
+        //        if (tryBatching) {
+        //            final WatchBatching watchBatching = this.watchBatching;
+        //            if (watchBatching != null && watchBatching.apply(new WatchEntry(key, listener), future)) {
+        //                return future;
+        //            }
+        //        }
+        internalWatch(key, listener, future, this.failoverRetries, null);
+        return future;
+    }
+
+    private void internalWatch(final byte[] key, final WatchListener listener, final CompletableFuture<Boolean> future,
+                             final int retriesLeft, final Errors lastCause) {
+        final Region region = this.pdClient.findRegionByKey(key, ErrorsHelper.isInvalidEpoch(lastCause));
+        final RegionEngine regionEngine = getRegionEngine(region.getId(), true);
+        final RetryRunner retryRunner = retryCause -> internalWatch(key, listener, future, retriesLeft - 1,
+                retryCause);
+        final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, retriesLeft, retryRunner);
+        if (regionEngine != null) {
+            if (ensureOnValidEpoch(region, regionEngine, closure)) {
+                getRawKVStore(regionEngine).watch(key, listener, closure);
+            }
+        } else {
+            final WatchRequest request = new WatchRequest();
+            request.setKey(key);
+            request.setListener(listener);
+            request.setRegionId(region.getId());
+            request.setRegionEpoch(region.getRegionEpoch());
+            this.rheaKVRpcService.callAsyncWithRpc(request, closure, lastCause);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Boolean> unwatch(byte[] key) {
+        Requires.requireNonNull(key, "key");
+        return unwatch(key, new CompletableFuture<>(), false);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> unwatch(String key) {
+        return unwatch(BytesUtil.writeUtf8(key));
+    }
+
+    @Override
+    public Boolean bUnwatch(byte[] key) {
+        return FutureHelper.get(unwatch(key), this.futureTimeoutMillis);
+    }
+
+    @Override
+    public Boolean bUnwatch(String key) {
+        return FutureHelper.get(unwatch(key), this.futureTimeoutMillis);
+    }
+
+    private CompletableFuture<Boolean> unwatch(final byte[] key, final CompletableFuture<Boolean> future,
+                                               final boolean tryBatching) {
+        checkState();
+        // TODO batching unwatch
+        //        if (tryBatching) {
+        //            final WatchBatching watchBatching = this.watchBatching;
+        //            if (watchBatching != null && watchBatching.apply(new WatchEntry(key, listener), future)) {
+        //                return future;
+        //            }
+        //        }
+        internalUnwatch(key, future, this.failoverRetries, null);
+        return future;
+    }
+
+    private void internalUnwatch(final byte[] key, final CompletableFuture<Boolean> future,
+                               final int retriesLeft, final Errors lastCause) {
+        final Region region = this.pdClient.findRegionByKey(key, ErrorsHelper.isInvalidEpoch(lastCause));
+        final RegionEngine regionEngine = getRegionEngine(region.getId(), true);
+        final RetryRunner retryRunner = retryCause -> internalUnwatch(key, future, retriesLeft - 1,
+                retryCause);
+        final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, retriesLeft, retryRunner);
+        if (regionEngine != null) {
+            if (ensureOnValidEpoch(region, regionEngine, closure)) {
+                getRawKVStore(regionEngine).unwatch(key, closure);
+            }
+        } else {
+            final UnwatchRequest request = new UnwatchRequest();
+            request.setKey(key);
+            request.setRegionId(region.getId());
+            request.setRegionEpoch(region.getRegionEpoch());
+            this.rheaKVRpcService.callAsyncWithRpc(request, closure, lastCause);
+        }
+    }
+
+    //    public CompletableFuture<Boolean> watch(final List<WatchEntry> entries) {
+    //        checkState();
+    //        Requires.requireNonNull(entries, "entries");
+    //        Requires.requireTrue(!entries.isEmpty(), "entries empty");
+    //        final FutureGroup<Boolean> futureGroup = internalWatch(entries, this.failoverRetries, null);
+    //        return FutureHelper.joinBooleans(futureGroup);
+    //    }
+    //
+    //    private FutureGroup<Boolean> internalWatch(final List<WatchEntry> entries, final int retriesLeft,
+    //                                             final Throwable lastCause) {
+    //        final Map<Region, List<WatchEntry>> regionMap = this.pdClient
+    //                .findRegionsByWatchEntries(entries, ApiExceptionHelper.isInvalidEpoch(lastCause));
+    //        final List<CompletableFuture<Boolean>> futures = Lists.newArrayListWithCapacity(regionMap.size());
+    //        final Errors lastError = lastCause == null ? null : Errors.forException(lastCause);
+    //        for (final Map.Entry<Region, List<WatchEntry>> entry : regionMap.entrySet()) {
+    //            final Region region = entry.getKey();
+    //            final List<WatchEntry> subEntries = entry.getValue();
+    //            final RetryCallable<Boolean> retryCallable = retryCause -> internalWatch(subEntries, retriesLeft - 1,
+    //                    retryCause);
+    //            final BoolFailoverFuture future = new BoolFailoverFuture(retriesLeft, retryCallable);
+    //            internalRegionWatch(region, subEntries, future, retriesLeft, lastError);
+    //            futures.add(future);
+    //        }
+    //        return new FutureGroup<>(futures);
+    //    }
+
+    //    private void internalRegionWatch(final Region region, final List<WatchEntry> subEntries,
+    //                                   final CompletableFuture<Boolean> future, final int retriesLeft,
+    //                                   final Errors lastCause) {
+    //        final RegionEngine regionEngine = getRegionEngine(region.getId(), true);
+    //        final RetryRunner retryRunner = retryCause -> internalRegionWatch(region, subEntries, future,
+    //                retriesLeft - 1, retryCause);
+    //        final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, false, retriesLeft,
+    //                retryRunner);
+    //        if (regionEngine != null) {
+    //            if (ensureOnValidEpoch(region, regionEngine, closure)) {
+    //                final RawKVStore rawKVStore = getRawKVStore(regionEngine);
+    //                if (this.kvDispatcher == null) {
+    //                    rawKVStore.watch(subEntries, closure);
+    //                } else {
+    //                    this.kvDispatcher.execute(() -> rawKVStore.put(subEntries, closure));
+    //                }
+    //            }
+    //        } else {
+    //            final BatchPutRequest request = new BatchPutRequest();
+    //            request.setKvEntries(subEntries);
+    //            request.setRegionId(region.getId());
+    //            request.setRegionEpoch(region.getRegionEpoch());
+    //            this.rheaKVRpcService.callAsyncWithRpc(request, closure, lastCause);
+    //        }
+    //    }
+
     // internal api
     public CompletableFuture<Boolean> execute(final long regionId, final NodeExecutor executor) {
         checkState();
@@ -1843,6 +1986,72 @@ public class DefaultRheaKVStore implements RheaKVStore {
         }
     }
 
+    //    private class WatchBatching extends Batching<DefaultRheaKVStore.WatchEvent, WatchEntry, Boolean> {
+    //
+    //        public WatchBatching(EventFactory<DefaultRheaKVStore.WatchEvent> factory, String name, WatchBatchingHandler handler) {
+    //            super(factory, batchingOpts.getBufSize(), name, handler);
+    //        }
+    //
+    //        @Override
+    //        public boolean apply(final WatchEntry message, final CompletableFuture<Boolean> future) {
+    //            return this.ringBuffer.tryPublishEvent((event, sequence) -> {
+    //                event.reset();
+    //                event.key = message.getKey();
+    //                event.listener = message.getListener();
+    //                event.future = future;
+    //            });
+    //        }
+    //    }
+
+    //    private class WatchBatchingHandler extends AbstractBatchingHandler<DefaultRheaKVStore.WatchEvent> {
+    //
+    //        public WatchBatchingHandler(String metricsName) {
+    //            super(metricsName);
+    //        }
+    //
+    //        @SuppressWarnings("unchecked")
+    //        @Override
+    //        public void onEvent(final DefaultRheaKVStore.WatchEvent event, final long sequence, final boolean endOfBatch) throws Exception {
+    //            this.events.add(event);
+    //            this.cachedBytes += event.key.length + Serializers.getDefault().writeObject(event.listener).length;
+    //            final int size = this.events.size();
+    //            if (!endOfBatch && size < batchingOpts.getBatchSize() && this.cachedBytes < batchingOpts.getMaxWriteBytes()) {
+    //                return;
+    //            }
+    //
+    //            if (size == 1) {
+    //                reset();
+    //                try {
+    //                    watch(event.key, event.listener, event.future, false);
+    //                } catch (final Throwable t) {
+    //                    exceptionally(t, event.future);
+    //                }
+    //            } else {
+    //                final List<WatchEntry> entries = Lists.newArrayListWithCapacity(size);
+    //                final CompletableFuture<Boolean>[] futures = new CompletableFuture[size];
+    //                for (int i = 0; i < size; i++) {
+    //                    final DefaultRheaKVStore.WatchEvent e = this.events.get(i);
+    //                    entries.add(new WatchEntry(e.key, e.listener));
+    //                    futures[i] = e.future;
+    //                }
+    //                reset();
+    //                try {
+    //                    watch(entries).whenComplete((result, throwable) -> {
+    //                        if (throwable == null) {
+    //                            for (int i = 0; i < futures.length; i++) {
+    //                                futures[i].complete(result);
+    //                            }
+    //                            return;
+    //                        }
+    //                        exceptionally(throwable, futures);
+    //                    });
+    //                } catch (final Throwable t) {
+    //                    exceptionally(t, futures);
+    //                }
+    //            }
+    //        }
+    //    }
+
     private abstract class AbstractBatchingHandler<T> implements EventHandler<T> {
 
         protected final Histogram histogramWithKeys;
@@ -1889,6 +2098,19 @@ public class DefaultRheaKVStore implements RheaKVStore {
 
         public void reset() {
             this.kvEntry = null;
+            this.future = null;
+        }
+    }
+
+    private static class WatchEvent {
+
+        private byte[]                     key;
+        private WatchListener              listener;
+        private CompletableFuture<Boolean> future;
+
+        public void reset() {
+            this.key = null;
+            this.listener = null;
             this.future = null;
         }
     }

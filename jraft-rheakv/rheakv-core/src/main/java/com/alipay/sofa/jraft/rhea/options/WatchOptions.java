@@ -14,22 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alipay.sofa.jraft.rhea.storage;
+package com.alipay.sofa.jraft.rhea.options;
 
-/**
- * @author jiachun.fjc
- */
-public enum SstColumnFamily {
+import com.alipay.sofa.jraft.Node;
+import com.alipay.sofa.jraft.util.Copiable;
+import lombok.Builder;
+import lombok.Data;
 
-    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3), WATCH(4);
+@Builder
+@Data
+public class WatchOptions implements Copiable<WatchOptions> {
+    private int disruptorBufferSize = 16384;
 
-    private final int value;
-
-    SstColumnFamily(int value) {
-        this.value = value;
+    public WatchOptions(int disruptorBufferSize) {
+        this.disruptorBufferSize = disruptorBufferSize;
     }
 
-    public int getValue() {
-        return value;
+    public WatchOptions() {
+
+    }
+
+    @Override
+    public WatchOptions copy() {
+        return WatchOptions.builder().disruptorBufferSize(disruptorBufferSize).build();
     }
 }

@@ -54,6 +54,7 @@ public class StoreEngineOptions {
     private long                      metricsReportPeriod           = TimeUnit.MINUTES.toSeconds(5);
     // the minimum number of keys required to split, less than this value will refuse to split
     private long                      leastKeysOnSplit              = 10000;
+    private int                       watchDisruptorSize            = 16384;
 
     public StorageType getStorageType() {
         return storageType;
@@ -207,6 +208,14 @@ public class StoreEngineOptions {
         this.leastKeysOnSplit = leastKeysOnSplit;
     }
 
+    public int getWatchDisruptorSize() {
+        return watchDisruptorSize;
+    }
+
+    public void setWatchDisruptorSize(int watchDisruptorSize) {
+        this.watchDisruptorSize = watchDisruptorSize;
+    }
+
     @Override
     public String toString() {
         return "StoreEngineOptions{" + "storageType=" + storageType + ", rocksDBOptions=" + rocksDBOptions
@@ -218,6 +227,6 @@ public class StoreEngineOptions {
                + ", snapshotCoreThreads=" + snapshotCoreThreads + ", snapshotMaxThreads=" + snapshotMaxThreads
                + ", cliRpcCoreThreads=" + cliRpcCoreThreads + ", raftRpcCoreThreads=" + raftRpcCoreThreads
                + ", kvRpcCoreThreads=" + kvRpcCoreThreads + ", metricsReportPeriod=" + metricsReportPeriod
-               + ", leastKeysOnSplit=" + leastKeysOnSplit + '}';
+               + ", leastKeysOnSplit=" + leastKeysOnSplit + ", watchDisruptorSize=" + watchDisruptorSize + '}';
     }
 }

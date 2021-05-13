@@ -19,6 +19,8 @@ package com.alipay.sofa.jraft.rhea.storage;
 import java.util.List;
 
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
+import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 
 /**
  * Raw KV store
@@ -251,4 +253,14 @@ public interface RawKVStore {
      * state machine is applied.
      */
     void execute(final NodeExecutor nodeExecutor, final boolean isLeader, final KVStoreClosure closure);
+
+    /**
+     * Set the database entry for "key" to "value".
+     */
+    void watch(final byte[] key, WatchListener listener, final KVStoreClosure closure);
+
+    /**
+     * Set the database entry for "key" to "value".
+     */
+    void unwatch(final byte[] key, final KVStoreClosure closure);
 }

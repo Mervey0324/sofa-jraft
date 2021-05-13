@@ -26,6 +26,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.alipay.sofa.jraft.rhea.options.*;
+import com.alipay.sofa.jraft.rhea.watch.WatchService;
+import com.alipay.sofa.jraft.rhea.watch.WatchServiceImpl;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,11 +48,6 @@ import com.alipay.sofa.jraft.rhea.metadata.Region;
 import com.alipay.sofa.jraft.rhea.metadata.RegionEpoch;
 import com.alipay.sofa.jraft.rhea.metadata.Store;
 import com.alipay.sofa.jraft.rhea.metrics.KVMetrics;
-import com.alipay.sofa.jraft.rhea.options.HeartbeatOptions;
-import com.alipay.sofa.jraft.rhea.options.MemoryDBOptions;
-import com.alipay.sofa.jraft.rhea.options.RegionEngineOptions;
-import com.alipay.sofa.jraft.rhea.options.RocksDBOptions;
-import com.alipay.sofa.jraft.rhea.options.StoreEngineOptions;
 import com.alipay.sofa.jraft.rhea.rpc.ExtSerializerSupports;
 import com.alipay.sofa.jraft.rhea.serialization.Serializers;
 import com.alipay.sofa.jraft.rhea.storage.BatchRawKVStore;
@@ -104,6 +102,7 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
     private File                                       dbPath;
     private RpcServer                                  rpcServer;
     private BatchRawKVStore<?>                         rawKVStore;
+    private WatchService                               watchService;
     private HeartbeatSender                            heartbeatSender;
     private StoreEngineOptions                         storeOpts;
 
@@ -214,6 +213,12 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
             LOG.error("Fail to init [RpcServer].");
             return false;
         }
+
+        // init watch listener
+        this.watchService = new WatchServiceImpl();
+        WatchOptions watchOptions = WatchOptions.builder().disruptorBufferSize(opts.getWatchDisruptorSize()).build();
+        this.watchService.init(watchOptions);
+
         // init db store
         if (!initRawKVStore(opts)) {
             return false;
@@ -221,6 +226,7 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
         if (this.rawKVStore instanceof Describer) {
             DescriberManager.getInstance().addDescriber((Describer) this.rawKVStore);
         }
+
         // init all region engine
         if (!initAllRegionEngine(opts, store)) {
             LOG.error("Fail to init all [RegionEngine].");
@@ -259,6 +265,9 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
         }
         if (this.rawKVStore != null) {
             this.rawKVStore.shutdown();
+        }
+        if (this.watchService != null) {
+            this.watchService.shutdown();
         }
         if (this.heartbeatSender != null) {
             this.heartbeatSender.shutdown();
@@ -307,6 +316,10 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
 
     public BatchRawKVStore<?> getRawKVStore() {
         return rawKVStore;
+    }
+
+    public WatchService getWatchService() {
+        return watchService;
     }
 
     public RegionKVService getRegionKVService(final long regionId) {
@@ -599,15 +612,15 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
         final StorageType storageType = opts.getStorageType();
         switch (storageType) {
             case RocksDB:
-                return initRocksDB(opts);
+                return initRocksDB(opts, watchService);
             case Memory:
-                return initMemoryDB(opts);
+                return initMemoryDB(opts, watchService);
             default:
                 throw new UnsupportedOperationException("unsupported storage type: " + storageType);
         }
     }
 
-    private boolean initRocksDB(final StoreEngineOptions opts) {
+    private boolean initRocksDB(final StoreEngineOptions opts, WatchService watchService) {
         RocksDBOptions rocksOpts = opts.getRocksDBOptions();
         if (rocksOpts == null) {
             rocksOpts = new RocksDBOptions();
@@ -627,7 +640,7 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
         final String childPath = "db_" + this.storeId + "_" + opts.getServerAddress().getPort();
         rocksOpts.setDbPath(Paths.get(dbPath, childPath).toString());
         this.dbPath = new File(rocksOpts.getDbPath());
-        final RocksRawKVStore rocksRawKVStore = new RocksRawKVStore();
+        final RocksRawKVStore rocksRawKVStore = new RocksRawKVStore(watchService);
         if (!rocksRawKVStore.init(rocksOpts)) {
             LOG.error("Fail to init [RocksRawKVStore].");
             return false;
@@ -636,13 +649,13 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
         return true;
     }
 
-    private boolean initMemoryDB(final StoreEngineOptions opts) {
+    private boolean initMemoryDB(final StoreEngineOptions opts, WatchService watchService) {
         MemoryDBOptions memoryOpts = opts.getMemoryDBOptions();
         if (memoryOpts == null) {
             memoryOpts = new MemoryDBOptions();
             opts.setMemoryDBOptions(memoryOpts);
         }
-        final MemoryRawKVStore memoryRawKVStore = new MemoryRawKVStore();
+        final MemoryRawKVStore memoryRawKVStore = new MemoryRawKVStore(watchService);
         if (!memoryRawKVStore.init(memoryOpts)) {
             LOG.error("Fail to init [MemoryRawKVStore].");
             return false;

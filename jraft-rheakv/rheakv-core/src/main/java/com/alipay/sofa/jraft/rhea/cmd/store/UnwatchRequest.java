@@ -14,22 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.alipay.sofa.jraft.rhea.storage;
+package com.alipay.sofa.jraft.rhea.cmd.store;
+
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
+import com.alipay.sofa.jraft.util.BytesUtil;
 
 /**
+ *
  * @author jiachun.fjc
  */
-public enum SstColumnFamily {
+public class UnwatchRequest extends BaseRequest {
 
-    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3), WATCH(4);
+    private static final long serialVersionUID = 5937066725083445707L;
 
-    private final int value;
+    private byte[]            key;
 
-    SstColumnFamily(int value) {
-        this.value = value;
+    public byte[] getKey() {
+        return key;
     }
 
-    public int getValue() {
-        return value;
+    public void setKey(byte[] key) {
+        this.key = key;
+    }
+
+    @Override
+    public byte magic() {
+        return UNWATCH;
+    }
+
+    @Override
+    public String toString() {
+        return "WatchRequest{" + "key=" + BytesUtil.toHex(key) + "} " + super.toString();
     }
 }

@@ -17,16 +17,15 @@
 package com.alipay.sofa.jraft.rhea.storage;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.stream.Collectors;
 
+import com.alipay.sofa.jraft.rhea.watch.EventType;
+import com.alipay.sofa.jraft.rhea.watch.WatchEvent;
+import com.alipay.sofa.jraft.rhea.watch.WatchService;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +45,7 @@ import com.codahale.metrics.Timer;
 
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.FencingKeyDB;
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.LockerDB;
+import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.WatchDB;
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.Segment;
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.TailIndex;
 
@@ -65,6 +65,15 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     private final Map<ByteArray, DistributedLock.Owner>  lockerDB     = new ConcurrentHashMap<>();
 
     private volatile MemoryDBOptions                     opts;
+
+    private WatchService                                 watchService;
+
+    public MemoryRawKVStore(WatchService watchService) {
+        this.watchService = watchService;
+    }
+
+    public MemoryRawKVStore() {
+    }
 
     @Override
     public boolean init(final MemoryDBOptions opts) {
@@ -248,7 +257,12 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void put(final byte[] key, final byte[] value, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("PUT");
         try {
+            byte[] preVal = this.defaultDB.getOrDefault(key, null);
             this.defaultDB.put(key, value);
+
+            // append watch event
+            this.watchService.appendEvent(new WatchEvent(key, preVal, value, EventType.PUT));
+
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [PUT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -264,6 +278,10 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
         final Timer.Context timeCtx = getTimeContext("GET_PUT");
         try {
             final byte[] prevVal = this.defaultDB.put(key, value);
+
+            // append watch event
+            this.watchService.appendEvent(new WatchEvent(key, prevVal, value, EventType.PUT));
+
             setSuccess(closure, prevVal);
         } catch (final Exception e) {
             LOG.error("Fail to [GET_PUT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -281,6 +299,10 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             final byte[] actual = this.defaultDB.get(key);
             if (Arrays.equals(expect, actual)) {
                 this.defaultDB.put(key, update);
+
+                // append watch event
+                this.watchService.appendEvent(new WatchEvent(key, actual, update, EventType.PUT));
+
                 setSuccess(closure, Boolean.TRUE);
             } else {
                 setSuccess(closure, Boolean.FALSE);
@@ -323,9 +345,13 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void put(final List<KVEntry> entries, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("PUT_LIST");
         try {
+            List<WatchEvent> events = new ArrayList<>();
             for (final KVEntry entry : entries) {
+                events.add(new WatchEvent(entry.getKey(), this.defaultDB.getOrDefault(entry.getKey(), null), entry
+                    .getValue(), EventType.PUT));
                 this.defaultDB.put(entry.getKey(), entry.getValue());
             }
+            this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Failed to [PUT_LIST], [size = {}], {}.", entries.size(), StackTraceUtil.stackTrace(e));
@@ -347,9 +373,12 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
                 }
             }
 
+            List<WatchEvent> events = new ArrayList<>();
             for (final CASEntry entry : entries) {
                 this.defaultDB.put(entry.getKey(), entry.getUpdate());
+                events.add(new WatchEvent(entry.getKey(), entry.getExpect(), entry.getUpdate(), EventType.PUT));
             }
+            this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Failed to [COMPARE_PUT_ALL], [size = {}], {}.", entries.size(), StackTraceUtil.stackTrace(e));
@@ -364,6 +393,11 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
         final Timer.Context timeCtx = getTimeContext("PUT_IF_ABSENT");
         try {
             final byte[] prevValue = this.defaultDB.putIfAbsent(key, value);
+
+            // append watch event
+            if (prevValue == null)
+                this.watchService.appendEvent(new WatchEvent(key, prevValue, value, EventType.PUT));
+
             setSuccess(closure, prevValue);
         } catch (final Exception e) {
             LOG.error("Fail to [PUT_IF_ABSENT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -627,7 +661,16 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void delete(final byte[] key, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("DELETE");
         try {
+            byte[] preVal = this.defaultDB.getOrDefault(key, null);
             this.defaultDB.remove(key);
+
+            // append watch event
+            WatchEvent event = new WatchEvent();
+            event.setEventType(EventType.DELETE);
+            event.setPreValue(preVal);
+            event.setKey(key);
+            this.watchService.appendEvent(event);
+
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [DELETE], [{}], {}.", BytesUtil.toHex(key), StackTraceUtil.stackTrace(e));
@@ -642,9 +685,15 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
         final Timer.Context timeCtx = getTimeContext("DELETE_RANGE");
         try {
             final ConcurrentNavigableMap<byte[], byte[]> subMap = this.defaultDB.subMap(startKey, endKey);
+            List<WatchEvent> events = new ArrayList<>();
             if (!subMap.isEmpty()) {
+
+                for (Map.Entry<byte[], byte[]> entry : subMap.entrySet()) {
+                    events.add(new WatchEvent(entry.getKey(), entry.getValue(), null, EventType.DELETE));
+                }
                 subMap.clear();
             }
+            this.watchService.appendEvents(events); // append watch events
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [DELETE_RANGE], ['[{}, {})'], {}.", BytesUtil.toHex(startKey), BytesUtil.toHex(endKey),
@@ -659,9 +708,12 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void delete(final List<byte[]> keys, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("DELETE_LIST");
         try {
+            List<WatchEvent> events = new ArrayList<>();
             for (final byte[] key : keys) {
+                events.add(new WatchEvent(key, this.defaultDB.getOrDefault(key, null), null, EventType.DELETE));
                 this.defaultDB.remove(key);
             }
+            this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Failed to [DELETE_LIST], [size = {}], {}.", keys.size(), StackTraceUtil.stackTrace(e));
@@ -744,6 +796,7 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             snapshotFile
                 .writeToFile(tempPath, "fencingKeyDB", new FencingKeyDB(subRangeMap(this.fencingKeyDB, region)));
             snapshotFile.writeToFile(tempPath, "lockerDB", new LockerDB(subRangeMap(this.lockerDB, region)));
+            snapshotFile.writeToFile(tempPath, "watchDB", new WatchDB(this.watchService.getListeners()));
             final int size = this.opts.getKeysPerSegment();
             final List<Pair<byte[], byte[]>> segment = Lists.newArrayListWithCapacity(size);
             int index = 0;
@@ -783,10 +836,12 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             final FencingKeyDB fencingKeyDB = snapshotFile.readFromFile(snapshotPath, "fencingKeyDB",
                 FencingKeyDB.class);
             final LockerDB lockerDB = snapshotFile.readFromFile(snapshotPath, "lockerDB", LockerDB.class);
+            final WatchDB watchDB = snapshotFile.readFromFile(snapshotPath, "watchDB", WatchDB.class);
 
             this.sequenceDB.putAll(sequenceDB.data());
             this.fencingKeyDB.putAll(fencingKeyDB.data());
             this.lockerDB.putAll(lockerDB.data());
+            this.watchService.addListeners(watchDB.data());
 
             final TailIndex tailIndex = snapshotFile.readFromFile(snapshotPath, "tailIndex", TailIndex.class);
             final int tail = tailIndex.data();
