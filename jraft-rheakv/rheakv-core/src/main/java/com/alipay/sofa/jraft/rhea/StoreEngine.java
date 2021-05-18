@@ -216,7 +216,7 @@ public class StoreEngine implements Lifecycle<StoreEngineOptions>, Describer {
 
         // init watch listener
         this.watchService = new WatchServiceImpl();
-        WatchOptions watchOptions = WatchOptions.builder().disruptorBufferSize(opts.getWatchDisruptorSize()).build();
+        WatchOptions watchOptions = opts.getWatchOptions();
         this.watchService.init(watchOptions);
 
         // init db store
