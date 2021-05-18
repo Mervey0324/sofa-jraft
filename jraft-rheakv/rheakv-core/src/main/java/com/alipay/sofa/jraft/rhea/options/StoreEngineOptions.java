@@ -54,7 +54,7 @@ public class StoreEngineOptions {
     private long                      metricsReportPeriod           = TimeUnit.MINUTES.toSeconds(5);
     // the minimum number of keys required to split, less than this value will refuse to split
     private long                      leastKeysOnSplit              = 10000;
-    private WatchOptions               watchOptions;
+    private WatchOptions              watchOptions;
 
     public StorageType getStorageType() {
         return storageType;
