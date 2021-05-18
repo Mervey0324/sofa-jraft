@@ -26,6 +26,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.alipay.sofa.jraft.rhea.watch.WatchEvent;
+import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -1203,5 +1205,71 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
         assertEquals(10, store.bGetSequence("a_seqTest", 1).getStartValue());
         assertEquals(11, store.bGetSequence("h_seqTest", 1).getStartValue());
         assertEquals(12, store.bGetSequence("z_seqTest", 1).getStartValue());
+    }
+
+    /**
+     * Test method: {@link RheaKVStore#watch(byte[], WatchListener)}
+     * Test method: {@link RheaKVStore#unwatch(byte[])}
+     */
+    private void watchTest(RheaKVStore store) {
+
+        // watch listener
+        WatchListener listener = new WatchListener() {
+            @Override
+            public void onNext(WatchEvent event) {
+                String msg = ">>>>>>>>>>>>>>> watch listener onNext is called! "
+                        + "\nkey is " + BytesUtil.readUtf8(event.getKey())
+                        + "\npreValue is " + event.getPreValue() == null?"null":BytesUtil.readUtf8(event.getPreValue())
+                        + "\ncurValue is " + event.getValue() == null?"null":BytesUtil.readUtf8(event.getValue())
+                        + "\nevent type is " + event.getEventType().name();
+                System.out.println(msg);
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                String msg = ">>>>>>>>>>>>>>> watch listener onError is called! "
+                        + "\nerror is " + throwable.toString();
+                System.out.println(msg);
+            }
+        };
+
+        //  watch values
+        // regions: 1 -> [null, g), 2 -> [g, null)
+        for (int i = 0; i < 3; i++) {
+            byte[] key = makeKey("batch_put_test_key" + i);
+            checkRegion(store, key, 1);
+            store.watch(key, listener);
+        }
+
+        for (int i = 0; i < 10; i++) {
+            byte[] key = makeKey("g_batch_put_test_key" + i);
+            checkRegion(store, key, 2);
+            store.watch(key, listener);
+        }
+
+        // put&delete
+        deleteListTest(store);
+
+        // unwatch values
+        // regions: 1 -> [null, g), 2 -> [g, null)
+        for (int i = 0; i < 3; i++) {
+            byte[] key = makeKey("batch_put_test_key" + i);
+            checkRegion(store, key, 1);
+            store.unwatch(key);
+        }
+
+        for (int i = 0; i < 10; i++) {
+            byte[] key = makeKey("g_batch_put_test_key" + i);
+            checkRegion(store, key, 2);
+            store.unwatch(key);
+        }
+
+        // put&delete
+        deleteListTest(store);
+    }
+
+    @Test
+    public void watchByLeaderTest() {
+        watchTest(getRandomLeaderStore());
     }
 }

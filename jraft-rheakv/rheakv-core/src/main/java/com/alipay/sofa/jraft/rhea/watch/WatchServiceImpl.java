@@ -30,10 +30,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
@@ -166,7 +163,11 @@ public class WatchServiceImpl implements WatchService {
     public void appendEvent(WatchEvent event) {
         if (this.shutdownLatch != null) {
 //            Utils.runClosureInThread(closure, new Status(RaftError.EHOSTDOWN, "Was stopped"));
-            throw new IllegalStateException("Service already shutdown.");
+            IllegalStateException e = new IllegalStateException("Service already shutdown.");
+            if (listeners.containsKey(event.getKey())) {
+                listeners.get(event.getKey()).onError(e);
+            }
+//            throw e;
         }
         if(!this.listeners.containsKey(event.getKey()))
             return;
@@ -196,14 +197,28 @@ public class WatchServiceImpl implements WatchService {
             }
         } catch (final Exception e) {
 //            Utils.runClosureInThread(closure, new Status(RaftError.EPERM, "Node is down."));
-            throw e;
+            if (listeners.containsKey(event.getKey())) {
+                listeners.get(event.getKey()).onError(e);
+            }
+//            throw e;
         }
     }
 
+    @Override
     public void appendEvents(List<WatchEvent> events) {
+
+        Set<byte[]> keys = new HashSet<>();
+        events.forEach(event -> keys.add(event.getKey()));
+
         if (this.shutdownLatch != null) {
 //            Utils.runClosureInThread(closure, new Status(RaftError.EHOSTDOWN, "Was stopped"));
-            throw new IllegalStateException("Service already shutdown.");
+            IllegalStateException e = new IllegalStateException("Service already shutdown.");
+            keys.forEach(key -> {
+                if (listeners.containsKey(key)) {
+                    listeners.get(key).onError(e);
+                }
+            });
+//            throw e;
         }
         List<WatchEvent> validEvents = new ArrayList<>();
         for (WatchEvent event : events) {
@@ -241,7 +256,12 @@ public class WatchServiceImpl implements WatchService {
                 }
             } catch (final Exception e) {
 //            Utils.runClosureInThread(closure, new Status(RaftError.EPERM, "Node is down."));
-                throw e;
+//                throw e;
+                keys.forEach(key -> {
+                    if (listeners.containsKey(key)) {
+                        listeners.get(key).onError(e);
+                    }
+                });
             }
         }
     }
