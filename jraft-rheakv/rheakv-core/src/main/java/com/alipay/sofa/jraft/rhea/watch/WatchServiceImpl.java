@@ -60,7 +60,8 @@ public class WatchServiceImpl implements WatchService {
     private class WatchEventHandler implements EventHandler<WatchEvent> {
         @Override
         public void onEvent(WatchEvent event, long sequence, boolean endOfBatch) throws Exception {
-            if (listeners.containsKey(event.getKey())) {
+            Requires.requireNonNull(listeners, "listeners");
+            if (!listeners.isEmpty() && listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onNext(event);
             }
         }
@@ -68,7 +69,6 @@ public class WatchServiceImpl implements WatchService {
 
     public WatchServiceImpl(WatchOptions options) {
         this.options = options;
-
         init(options);
     }
 
@@ -107,7 +107,6 @@ public class WatchServiceImpl implements WatchService {
         }
         this.shutdownLatch = new CountDownLatch(1);
         Utils.runInThread(() -> this.watchRingBuffer.publishEvent((event, sequence) -> {}));
-        listeners.clear();
     }
 
     public void join() throws InterruptedException {
@@ -115,6 +114,7 @@ public class WatchServiceImpl implements WatchService {
             this.shutdownLatch.await();
         }
         this.watchDisruptor.shutdown();
+        listeners.clear();
     }
 
     @Override
@@ -139,6 +139,7 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public void appendEvent(WatchEvent event) {
+        LOG.info("append watch event, event is {}", event);
         if (this.shutdownLatch != null) {
             IllegalStateException e = new IllegalStateException("Service already shutdown.");
             if (listeners.containsKey(event.getKey())) {
@@ -179,7 +180,7 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public void appendEvents(List<WatchEvent> events) {
-
+        LOG.info("append watch events, events is {}", events);
         Set<byte[]> keys = new HashSet<>();
         events.forEach(event -> keys.add(event.getKey()));
 
