@@ -263,7 +263,7 @@ public class KVOperation implements Serializable {
 
     public static KVOperation createUnwatch(final byte[] key) {
         Requires.requireNonNull(key, "key");
-        return new KVOperation(key, null, WATCH);
+        return new KVOperation(key, null, UNWATCH);
     }
 
     public KVOperation() {
