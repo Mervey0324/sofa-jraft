@@ -38,6 +38,9 @@ public interface WatchService extends Lifecycle<WatchOptions> {
     void writeSnapshot(String snapshotPath, String suffix) throws Exception;
     void readSnapshot(String snapshotPath, String suffix) throws Exception;
 
+    // watch
+    boolean isWatched(byte[] key);
+
     // other
     void join() throws InterruptedException;
 }

@@ -690,7 +690,10 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
+            byte[] preVal = this.db.get(key);
             this.db.merge(this.writeOptions, key, value);
+            byte[] curVal = this.db.get(key);
+            this.watchService.appendEvent(new WatchEvent(key, preVal, curVal, EventType.PUT));
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [MERGE], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -716,11 +719,17 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         try {
             Partitions.manyToOne(kvStates, MAX_BATCH_WRITE_SIZE, (Function<List<KVState>, Void>) segment -> {
                 try (final WriteBatch batch = new WriteBatch()) {
+                    List<WatchEvent> events = new ArrayList<>(segment.size());
                     for (final KVState kvState : segment) {
                         final KVOperation op = kvState.getOp();
+                        byte[] preVal = this.db.get(op.getKey());
                         batch.merge(op.getKey(), op.getValue());
+                        byte[] curVal = this.db.get(op.getKey());
+                        // append watch events
+                        events.add(new WatchEvent(op.getKey(), preVal, curVal, EventType.PUT));
                     }
                     this.db.write(this.writeOptions, batch);
+                    this.watchService.appendEvents(events);
                     for (final KVState kvState : segment) {
                         setSuccess(kvState.getDone(), Boolean.TRUE);
                     }
@@ -1210,7 +1219,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             List<WatchEvent> events = new ArrayList<>();
             RocksIterator iterator = this.db.newIterator();
             iterator.seek(startKey);
-            while (BytesUtil.compare(startKey, iterator.key()) >= 0 && BytesUtil.compare(endKey, iterator.key()) <= 0) {
+            while (BytesUtil.compare(startKey, iterator.key()) <= 0 && BytesUtil.compare(endKey, iterator.key()) > 0) {
                 events.add(new WatchEvent(iterator.key(), iterator.value(), null, EventType.DELETE));
                 iterator.next();
             }

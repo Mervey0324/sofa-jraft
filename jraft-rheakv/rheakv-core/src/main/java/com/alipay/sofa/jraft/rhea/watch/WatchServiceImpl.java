@@ -241,6 +241,11 @@ public class WatchServiceImpl implements WatchService {
     }
 
     @Override
+    public boolean isWatched(byte[] key) {
+        return listeners.containsKey(key);
+    }
+
+    @Override
     public void writeSnapshot(final String snapshotPath, String suffix) throws Exception {
         File file;
         if(StringUtils.isBlank(suffix))

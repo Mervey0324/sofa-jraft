@@ -1231,27 +1231,17 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
     private void putAndDelete() {
         // put test
         putByLeaderTest();
-        putByFollowerTest();
-        getAndPutByLeaderTest();
-        getAndPutByFollowerTest();
-        compareAndPutByLeaderTest();
-        compareAndPutByFollowerTest();
+//        getAndPutByLeaderTest();
+//        compareAndPutByLeaderTest();
         compareAndPutAllByLeaderTest();
-        compareAndPutAllByFollowerTest();
         mergeByLeaderTest();
-        mergeByFollowerTest();
         putListByLeaderTest();
-        putListByFollowerTest1();
-        putIfAbsentByLeaderTest();
-        putIfAbsentByFollowerTest();
+//        putIfAbsentByLeaderTest();
 
         // delete test
         deleteByLeaderTest();
-        deleteByFollowerTest1();
         deleteRangeByLeaderTest();
-        deleteRangeByFollowerTest();
         deleteListByLeaderTest();
-        deleteListByFollowerTest();
     }
 
     /**

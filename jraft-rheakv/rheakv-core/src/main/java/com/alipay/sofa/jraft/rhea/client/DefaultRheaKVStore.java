@@ -1509,7 +1509,6 @@ public class DefaultRheaKVStore implements RheaKVStore {
 
     private void internalWatchLocal(final byte[] key, final WatchListener listener, final CompletableFuture<Boolean> future,
                                final int retriesLeft, final Errors lastCause) {
-        LOG.info(">>>>>>>>> enter DefaultRheaKVStore.internalWatchLocal");
 //        final RetryRunner retryRunner = retryCause -> internalWatchLocal(key, listener, future, retriesLeft - 1,
 //                retryCause);
         final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, 0, null);
@@ -1593,7 +1592,6 @@ public class DefaultRheaKVStore implements RheaKVStore {
 
     private void internalUnwatchLocal(final byte[] key, final CompletableFuture<Boolean> future,
                                     final int retriesLeft, final Errors lastCause) {
-        LOG.info(">>>>>>>>> enter DefaultRheaKVStore.internalWatchLocal");
 //        final RetryRunner retryRunner = retryCause -> internalUnwatchLocal(key, future, retriesLeft - 1,
 //                retryCause);
         final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, 0, null);
