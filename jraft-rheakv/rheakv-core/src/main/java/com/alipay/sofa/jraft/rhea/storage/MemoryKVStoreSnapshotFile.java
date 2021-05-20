@@ -155,16 +155,6 @@ public class MemoryKVStoreSnapshotFile extends AbstractKVStoreSnapshotFile {
     }
 
     /**
-     * The data of watch info
-     */
-    static class WatchDB extends Persistence<Map<byte[], WatchListener>> {
-
-        public WatchDB(Map<byte[], WatchListener> data) {
-            super(data);
-        }
-    }
-
-    /**
      * The data will be cut into many small portions, each called a segment
      */
     static class Segment extends Persistence<List<Pair<byte[], byte[]>>> {

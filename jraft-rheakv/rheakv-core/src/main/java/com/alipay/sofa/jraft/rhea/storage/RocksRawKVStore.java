@@ -1413,7 +1413,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                     final File sstFile = entry.getValue();
                     final ColumnFamilyHandle columnFamilyHandle = findColumnFamilyHandle(sstColumnFamily);
                     try (final RocksIterator it = this.db.newIterator(columnFamilyHandle, readOptions);
-                         final SstFileWriter sstFileWriter = new SstFileWriter(envOptions, options)) {
+                            final SstFileWriter sstFileWriter = new SstFileWriter(envOptions, options)) {
                         if (startKey == null) {
                             it.seekToFirst();
                         } else {
@@ -1473,8 +1473,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                     }
                     final String filePath = sstFile.getAbsolutePath();
                     LOG.info("Start ingest sst file {}.", filePath);
-                    this.db.ingestExternalFile(columnFamilyHandle, Collections.singletonList(filePath),
-                            ingestOptions);
+                    this.db.ingestExternalFile(columnFamilyHandle, Collections.singletonList(filePath), ingestOptions);
                 } catch (final RocksDBException e) {
                     throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
                 }

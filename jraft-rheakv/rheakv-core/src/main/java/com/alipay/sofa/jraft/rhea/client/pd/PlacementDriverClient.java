@@ -66,11 +66,6 @@ public interface PlacementDriverClient extends Lifecycle<PlacementDriverOptions>
     /**
      * Returns the regions to which the keys belongs.
      */
-    Map<Region, List<WatchEntry>> findRegionsByWatchEntries(final List<WatchEntry> kvEntries, final boolean forceRefresh);
-
-    /**
-     * Returns the regions to which the keys belongs.
-     */
     Map<Region, List<CASEntry>> findRegionsByCASEntries(final List<CASEntry> casEntries, final boolean forceRefresh);
 
     /**

@@ -243,25 +243,6 @@ public class RegionRouteTable {
     /**
      * Returns the list of regions to which the keys belongs.
      */
-    public Map<Region, List<WatchEntry>> findRegionsByWatchEntries(final List<WatchEntry> entries) {
-        Requires.requireNonNull(entries, "WatchEntries");
-        final Map<Region, List<WatchEntry>> regionMap = Maps.newHashMap();
-        final StampedLock stampedLock = this.stampedLock;
-        final long stamp = stampedLock.readLock();
-        try {
-            for (final WatchEntry entry : entries) {
-                final Region region = findRegionByKeyWithoutLock(entry.getKey());
-                regionMap.computeIfAbsent(region, k -> Lists.newArrayList()).add(entry);
-            }
-            return regionMap;
-        } finally {
-            stampedLock.unlockRead(stamp);
-        }
-    }
-
-    /**
-     * Returns the list of regions to which the keys belongs.
-     */
     public Map<Region, List<CASEntry>> findRegionsByCASEntries(final List<CASEntry> casEntries) {
         Requires.requireNonNull(casEntries, "casEntries");
         final Map<Region, List<CASEntry>> regionMap = Maps.newHashMap();

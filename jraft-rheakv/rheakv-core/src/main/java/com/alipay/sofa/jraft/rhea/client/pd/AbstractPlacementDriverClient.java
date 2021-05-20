@@ -151,15 +151,6 @@ public abstract class AbstractPlacementDriverClient implements PlacementDriverCl
     }
 
     @Override
-    public Map<Region, List<WatchEntry>> findRegionsByWatchEntries(final List<WatchEntry> watchEntries,
-                                                                   final boolean forceRefresh) {
-        if (forceRefresh) {
-            refreshRouteTable();
-        }
-        return this.regionRouteTable.findRegionsByWatchEntries(watchEntries);
-    }
-
-    @Override
     public Map<Region, List<CASEntry>> findRegionsByCASEntries(List<CASEntry> casEntries, boolean forceRefresh) {
         if (forceRefresh) {
             refreshRouteTable();
