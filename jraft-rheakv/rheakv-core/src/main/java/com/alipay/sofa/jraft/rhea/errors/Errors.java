@@ -84,7 +84,10 @@ public enum Errors {
                             + "The new region cannot be created.", RangeSplitFailException::new),
 
     TOO_SMALL_TO_SPLIT(18, "The region size is too small to split. See the server logs for more details.",
-        RangeSplitFailException::new);
+        RangeSplitFailException::new),
+
+    WATCH_ERROR(19, "watch key error.", WatchException::new),
+    UNWATCH_ERROR(20, "unwatch key error.", UnwatchException::new);
 
     private interface ApiExceptionBuilder {
         ApiException build(final String message);

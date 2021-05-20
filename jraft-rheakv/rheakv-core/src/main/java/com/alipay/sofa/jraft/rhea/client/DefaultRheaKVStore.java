@@ -1478,11 +1478,6 @@ public class DefaultRheaKVStore implements RheaKVStore {
     }
 
     @Override
-    public CompletableFuture<Boolean> watch(String key, WatchListener listener) {
-        return watch(BytesUtil.writeUtf8(key), listener);
-    }
-
-    @Override
     public Boolean bWatch(byte[] key, WatchListener listener) {
         return FutureHelper.get(watch(key, listener), this.futureTimeoutMillis);
     }
@@ -1490,6 +1485,11 @@ public class DefaultRheaKVStore implements RheaKVStore {
     @Override
     public Boolean bWatch(String key, WatchListener listener) {
         return FutureHelper.get(watch(key, listener), this.futureTimeoutMillis);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> watch(String key, WatchListener listener) {
+        return watch(BytesUtil.writeUtf8(key), listener);
     }
 
     private CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener,
@@ -1502,8 +1502,36 @@ public class DefaultRheaKVStore implements RheaKVStore {
         //                return future;
         //            }
         //        }
-        internalWatch(key, listener, future, this.failoverRetries, null);
+        internalWatchLocal(key, listener, future, this.failoverRetries, null);
+//        internalWatch(key, listener, future, this.failoverRetries, null);
         return future;
+    }
+
+    private void internalWatchLocal(final byte[] key, final WatchListener listener, final CompletableFuture<Boolean> future,
+                               final int retriesLeft, final Errors lastCause) {
+        LOG.info(">>>>>>>>> enter DefaultRheaKVStore.internalWatchLocal");
+//        final RetryRunner retryRunner = retryCause -> internalWatchLocal(key, listener, future, retriesLeft - 1,
+//                retryCause);
+        final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, 0, null);
+        Status status = Status.OK();
+        Errors error = Errors.WATCH_ERROR;
+        int retry = retriesLeft;
+        while(retry > 0){
+            try{
+                this.storeEngine.getWatchService().addListener(key, listener);
+                closure.setData(Boolean.TRUE);
+                closure.run(Status.OK());
+                return;
+            }catch (Throwable e){
+                LOG.error("Fail to watch, watchKey={}.", BytesUtil.toHex(key), e);
+                error.exception().addSuppressed(e);
+            }
+            retry--;
+        }
+        status.setCode(error.code());
+        status.setErrorMsg("watch key error, key is " + BytesUtil.toHex(key));
+        closure.setError(error);
+        closure.run(status);
     }
 
     private void internalWatch(final byte[] key, final WatchListener listener, final CompletableFuture<Boolean> future,
@@ -1558,8 +1586,36 @@ public class DefaultRheaKVStore implements RheaKVStore {
         //                return future;
         //            }
         //        }
-        internalUnwatch(key, future, this.failoverRetries, null);
+        internalUnwatchLocal(key, future, this.failoverRetries, null);
+//        internalUnwatch(key, future, this.failoverRetries, null);
         return future;
+    }
+
+    private void internalUnwatchLocal(final byte[] key, final CompletableFuture<Boolean> future,
+                                    final int retriesLeft, final Errors lastCause) {
+        LOG.info(">>>>>>>>> enter DefaultRheaKVStore.internalWatchLocal");
+//        final RetryRunner retryRunner = retryCause -> internalUnwatchLocal(key, future, retriesLeft - 1,
+//                retryCause);
+        final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, 0, null);
+        Status status = Status.OK();
+        Errors error = Errors.UNWATCH_ERROR;
+        int retry = retriesLeft;
+        while(retry > 0){
+            try{
+                this.storeEngine.getWatchService().removeListener(key);
+                closure.setData(Boolean.TRUE);
+                closure.run(Status.OK());
+                return;
+            }catch (Throwable e){
+                LOG.error("Fail to unwatch, watchKey={}.", BytesUtil.toHex(key), e);
+                error.exception().addSuppressed(e);
+            }
+            retry--;
+        }
+        status.setCode(error.code());
+        status.setErrorMsg("unwatch key error, key is " + BytesUtil.toHex(key));
+        closure.setError(error);
+        closure.run(status);
     }
 
     private void internalUnwatch(final byte[] key, final CompletableFuture<Boolean> future,

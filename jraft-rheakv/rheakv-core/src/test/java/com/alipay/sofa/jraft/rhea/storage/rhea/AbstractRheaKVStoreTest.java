@@ -50,6 +50,8 @@ import com.alipay.sofa.jraft.rhea.util.ByteArray;
 import com.alipay.sofa.jraft.rhea.util.Lists;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
 import com.alipay.sofa.jraft.util.BytesUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.alipay.sofa.jraft.rhea.KeyValueTool.makeKey;
 import static com.alipay.sofa.jraft.rhea.KeyValueTool.makeValue;
@@ -68,6 +70,7 @@ import static org.junit.Assert.assertTrue;
 public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
 
     public abstract StorageType getStorageType();
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractRheaKVStoreTest.class);
 
     @Rule
     public TestName testName = new TestName();
@@ -1261,19 +1264,17 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
         WatchListener listener = new WatchListener() {
             @Override
             public void onNext(WatchEvent event) {
-                String msg = ">>>>>>>>>>>>>>> watch listener onNext is called! "
-                        + "\nkey is " + BytesUtil.readUtf8(event.getKey())
-                        + "\npreValue is " + event.getPreValue() == null?"null":BytesUtil.readUtf8(event.getPreValue())
-                        + "\ncurValue is " + event.getValue() == null?"null":BytesUtil.readUtf8(event.getValue())
-                        + "\nevent type is " + event.getEventType().name();
-                System.out.println(msg);
+                LOG.info(">>>>>>>>> watch listener onNext is called! key is {}, preValue is {}, curValue is {}, event type is {}",
+                        BytesUtil.readUtf8(event.getKey()),
+                        event.getPreValue() == null?"null":BytesUtil.readUtf8(event.getPreValue()),
+                        event.getValue() == null?"null":BytesUtil.readUtf8(event.getValue()),
+                        event.getEventType().name()
+                );
             }
 
             @Override
             public void onError(Throwable throwable) {
-                String msg = ">>>>>>>>>>>>>>> watch listener onError is called! "
-                        + "\nerror is " + throwable.toString();
-                System.out.println(msg);
+                LOG.info(">>>>>>>>> watch listener onError is called!", throwable);
             }
         };
 

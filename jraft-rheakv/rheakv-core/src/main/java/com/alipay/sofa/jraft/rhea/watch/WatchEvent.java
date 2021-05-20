@@ -16,11 +16,13 @@
  */
 package com.alipay.sofa.jraft.rhea.watch;
 
+import com.alipay.sofa.jraft.util.BytesUtil;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 
 @Data
@@ -32,4 +34,14 @@ public class WatchEvent {
     private byte[]    preValue;
     private byte[]    value;
     private EventType eventType;
+
+    @Override
+    public String toString() {
+        return "WatchEvent{" +
+                "key=" + BytesUtil.readUtf8(key) +
+                ", preValue=" + preValue == null ?"null":BytesUtil.readUtf8(preValue) +
+                ", value=" + value == null ?"null":BytesUtil.readUtf8(value) +
+                ", eventType=" + eventType +
+                '}';
+    }
 }
