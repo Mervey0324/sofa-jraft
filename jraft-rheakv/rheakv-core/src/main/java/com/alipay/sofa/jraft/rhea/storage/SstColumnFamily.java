@@ -21,7 +21,7 @@ package com.alipay.sofa.jraft.rhea.storage;
  */
 public enum SstColumnFamily {
 
-    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3), WATCH(4);
+    DEFAULT(0), SEQUENCE(1), LOCKING(2), FENCING(3);
 
     private final int value;
 

@@ -22,7 +22,6 @@ import java.util.concurrent.ExecutorService;
 import com.alipay.sofa.jraft.rhea.errors.StorageException;
 import com.alipay.sofa.jraft.rhea.metadata.Region;
 import com.alipay.sofa.jraft.rhea.util.RegionHelper;
-import com.alipay.sofa.jraft.rhea.watch.WatchService;
 
 import static com.alipay.sofa.jraft.entity.LocalFileMetaOutter.LocalFileMeta;
 

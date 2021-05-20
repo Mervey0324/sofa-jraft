@@ -45,7 +45,6 @@ import com.codahale.metrics.Timer;
 
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.FencingKeyDB;
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.LockerDB;
-import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.WatchDB;
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.Segment;
 import static com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile.TailIndex;
 
@@ -796,7 +795,6 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             snapshotFile
                 .writeToFile(tempPath, "fencingKeyDB", new FencingKeyDB(subRangeMap(this.fencingKeyDB, region)));
             snapshotFile.writeToFile(tempPath, "lockerDB", new LockerDB(subRangeMap(this.lockerDB, region)));
-            snapshotFile.writeToFile(tempPath, "watchDB", new WatchDB(this.watchService.getListeners()));
             final int size = this.opts.getKeysPerSegment();
             final List<Pair<byte[], byte[]>> segment = Lists.newArrayListWithCapacity(size);
             int index = 0;
@@ -836,12 +834,10 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             final FencingKeyDB fencingKeyDB = snapshotFile.readFromFile(snapshotPath, "fencingKeyDB",
                 FencingKeyDB.class);
             final LockerDB lockerDB = snapshotFile.readFromFile(snapshotPath, "lockerDB", LockerDB.class);
-            final WatchDB watchDB = snapshotFile.readFromFile(snapshotPath, "watchDB", WatchDB.class);
 
             this.sequenceDB.putAll(sequenceDB.data());
             this.fencingKeyDB.putAll(fencingKeyDB.data());
             this.lockerDB.putAll(lockerDB.data());
-            this.watchService.addListeners(watchDB.data());
 
             final TailIndex tailIndex = snapshotFile.readFromFile(snapshotPath, "tailIndex", TailIndex.class);
             final int tail = tailIndex.data();

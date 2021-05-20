@@ -1412,43 +1412,35 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                     final SstColumnFamily sstColumnFamily = entry.getKey();
                     final File sstFile = entry.getValue();
                     final ColumnFamilyHandle columnFamilyHandle = findColumnFamilyHandle(sstColumnFamily);
-                    if (columnFamilyHandle == null) {
-                        try {
-                            watchService.writeToFile(sstFile);
-                        } catch (final Exception e) {
-                            throw new StorageException("Fail to create sst file at path: " + sstFile, e);
+                    try (final RocksIterator it = this.db.newIterator(columnFamilyHandle, readOptions);
+                         final SstFileWriter sstFileWriter = new SstFileWriter(envOptions, options)) {
+                        if (startKey == null) {
+                            it.seekToFirst();
+                        } else {
+                            it.seek(startKey);
                         }
-                    } else {
-                        try (final RocksIterator it = this.db.newIterator(columnFamilyHandle, readOptions);
-                                final SstFileWriter sstFileWriter = new SstFileWriter(envOptions, options)) {
-                            if (startKey == null) {
-                                it.seekToFirst();
-                            } else {
-                                it.seek(startKey);
+                        sstFileWriter.open(sstFile.getAbsolutePath());
+                        long count = 0;
+                        for (;;) {
+                            if (!it.isValid()) {
+                                break;
                             }
-                            sstFileWriter.open(sstFile.getAbsolutePath());
-                            long count = 0;
-                            for (;;) {
-                                if (!it.isValid()) {
-                                    break;
-                                }
-                                final byte[] key = it.key();
-                                if (endKey != null && BytesUtil.compare(key, endKey) >= 0) {
-                                    break;
-                                }
-                                sstFileWriter.put(key, it.value());
-                                ++count;
-                                it.next();
+                            final byte[] key = it.key();
+                            if (endKey != null && BytesUtil.compare(key, endKey) >= 0) {
+                                break;
                             }
-                            if (count == 0) {
-                                sstFileWriter.close();
-                            } else {
-                                sstFileWriter.finish();
-                            }
-                            LOG.info("Finish sst file {} with {} keys.", sstFile, count);
-                        } catch (final RocksDBException e) {
-                            throw new StorageException("Fail to create sst file at path: " + sstFile, e);
+                            sstFileWriter.put(key, it.value());
+                            ++count;
+                            it.next();
                         }
+                        if (count == 0) {
+                            sstFileWriter.close();
+                        } else {
+                            sstFileWriter.finish();
+                        }
+                        LOG.info("Finish sst file {} with {} keys.", sstFile, count);
+                    } catch (final RocksDBException e) {
+                        throw new StorageException("Fail to create sst file at path: " + sstFile, e);
                     }
                 }
                 future.complete(null);
@@ -1475,24 +1467,16 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                 final SstColumnFamily sstColumnFamily = entry.getKey();
                 final File sstFile = entry.getValue();
                 final ColumnFamilyHandle columnFamilyHandle = findColumnFamilyHandle(sstColumnFamily);
-                if (columnFamilyHandle == null) {
-                    try {
-                        this.watchService.readFromFile(sstFile);
-                    } catch (final Exception e) {
-                        throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
+                try (final IngestExternalFileOptions ingestOptions = new IngestExternalFileOptions()) {
+                    if (FileUtils.sizeOf(sstFile) == 0L) {
+                        return;
                     }
-                } else {
-                    try (final IngestExternalFileOptions ingestOptions = new IngestExternalFileOptions()) {
-                        if (FileUtils.sizeOf(sstFile) == 0L) {
-                            return;
-                        }
-                        final String filePath = sstFile.getAbsolutePath();
-                        LOG.info("Start ingest sst file {}.", filePath);
-                        this.db.ingestExternalFile(columnFamilyHandle, Collections.singletonList(filePath),
+                    final String filePath = sstFile.getAbsolutePath();
+                    LOG.info("Start ingest sst file {}.", filePath);
+                    this.db.ingestExternalFile(columnFamilyHandle, Collections.singletonList(filePath),
                             ingestOptions);
-                    } catch (final RocksDBException e) {
-                        throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
-                    }
+                } catch (final RocksDBException e) {
+                    throw new StorageException("Fail to ingest sst file at path: " + sstFile, e);
                 }
             }
         } finally {
@@ -1518,9 +1502,8 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             final BackupInfo backupInfo = Collections.max(backupInfoList, Comparator.comparingInt(BackupInfo::backupId));
             final RocksDBBackupInfo rocksBackupInfo = new RocksDBBackupInfo(backupInfo);
             LOG.info("Backup rocksDB into {} with backupInfo {}.", backupDBPath, rocksBackupInfo);
-            this.watchService.writeToFile(Paths.get(backupDBPath, "watch."+backupInfo.backupId()).toFile());
             return rocksBackupInfo;
-        } catch (final Exception e) {
+        } catch (final RocksDBException e) {
             throw new StorageException("Fail to backup at path: " + backupDBPath, e);
         } finally {
             writeLock.unlock();
@@ -1541,8 +1524,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             LOG.info("Restored rocksDB from {} with {}.", backupDBPath, rocksBackupInfo);
             // reopen the db
             openRocksDB(this.opts);
-            this.watchService.readFromFile(Paths.get(backupDBPath, "watch." + rocksBackupInfo.getBackupId()).toFile());
-        } catch (final Exception e) {
+        } catch (final RocksDBException e) {
             throw new StorageException("Fail to restore from path: " + backupDBPath, e);
         } finally {
             writeLock.unlock();
@@ -1564,7 +1546,6 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             if (!tempFile.renameTo(snapshotFile)) {
                 throw new StorageException("Fail to rename [" + tempPath + "] to [" + snapshotPath + "].");
             }
-            this.watchService.writeToFile(Paths.get(snapshotPath + ".watch").toFile());
         } catch (final StorageException e) {
             throw e;
         } catch (final Exception e) {
@@ -1594,7 +1575,6 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             }
             // reopen the db
             openRocksDB(this.opts);
-            this.watchService.readFromFile(Paths.get(snapshotPath + ".watch").toFile());
         } catch (final Exception e) {
             throw new StorageException("Fail to read snapshot from path: " + snapshotPath, e);
         } finally {
@@ -1663,7 +1643,6 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         sstFileTable.put(SstColumnFamily.SEQUENCE, Paths.get(path, "sequence.sst").toFile());
         sstFileTable.put(SstColumnFamily.LOCKING, Paths.get(path, "locking.sst").toFile());
         sstFileTable.put(SstColumnFamily.FENCING, Paths.get(path, "fencing.sst").toFile());
-        sstFileTable.put(SstColumnFamily.WATCH, Paths.get(path, "watch.sst").toFile());
         return sstFileTable;
     }
 
@@ -1677,8 +1656,6 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
                 return this.lockingHandle;
             case FENCING:
                 return this.fencingHandle;
-            case WATCH:
-                return null;
             default:
                 throw new IllegalArgumentException("illegal sstColumnFamily: " + sstColumnFamily.name());
         }

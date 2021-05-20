@@ -35,8 +35,8 @@ public interface WatchService extends Lifecycle<WatchOptions> {
     void appendEvents(List<WatchEvent> events);
 
     // snapshot api
-    void writeToFile(File file) throws Exception;
-    void readFromFile(File file) throws Exception;
+    void writeSnapshot(String snapshotPath, String suffix) throws Exception;
+    void readSnapshot(String snapshotPath, String suffix) throws Exception;
 
     // other
     void join() throws InterruptedException;

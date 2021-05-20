@@ -84,7 +84,6 @@ public class KVStoreStateMachine extends StateMachineAdapter {
 
     @Override
     public void onApply(final Iterator it) {
-        LOG.info(">>>>>>>>> enter KVStoreStateMachine.onApply");
         int index = 0;
         int applied = 0;
         try {
@@ -278,11 +277,6 @@ public class KVStoreStateMachine extends StateMachineAdapter {
                 setCriticalError(closure, t);
             }
         }
-        Node node = this.storeEngine.getRegionEngine(this.region.getId()).getNode();
-        LOG.info(">>>>>>>>> KVStoreStateMachine.doWatch addListener end. group id is {}, endpoint is {}, watch listener size is {}",
-                node.getGroupId(),
-                node.getNodeId().getPeerId().getEndpoint(),
-                this.watchService.getListeners().size());
     }
 
     private void doUnwatch(final KVStateOutputList kvStates) {
@@ -303,11 +297,6 @@ public class KVStoreStateMachine extends StateMachineAdapter {
                 setCriticalError(closure, t);
             }
         }
-        Node node = this.storeEngine.getRegionEngine(this.region.getId()).getNode();
-        LOG.info(">>>>>>>>> KVStoreStateMachine.doUnwatch removeListener end. group id is {}, endpoint is {}, watch listener size is {}",
-                node.getGroupId(),
-                node.getNodeId().getPeerId().getEndpoint(),
-                this.watchService.getListeners().size());
     }
 
     @Override

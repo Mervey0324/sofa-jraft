@@ -16,6 +16,7 @@
  */
 package com.alipay.sofa.jraft.rhea.watch;
 
+import com.alipay.sofa.jraft.rhea.metadata.Region;
 import com.alipay.sofa.jraft.rhea.options.WatchOptions;
 import com.alipay.sofa.jraft.rhea.serialization.Serializer;
 import com.alipay.sofa.jraft.rhea.serialization.Serializers;
@@ -23,14 +24,17 @@ import com.alipay.sofa.jraft.util.*;
 import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 
 public class WatchServiceImpl implements WatchService {
 
@@ -60,9 +64,11 @@ public class WatchServiceImpl implements WatchService {
     private class WatchEventHandler implements EventHandler<WatchEvent> {
         @Override
         public void onEvent(WatchEvent event, long sequence, boolean endOfBatch) throws Exception {
+            LOG.info(">>>>>>>>> enter WatchEventHandler.onEvent");
             Requires.requireNonNull(listeners, "listeners");
             if (!listeners.isEmpty() && listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onNext(event);
+                LOG.info(">>>>>>>>> execute listener onNext end.");
             }
         }
     }
@@ -235,9 +241,30 @@ public class WatchServiceImpl implements WatchService {
     }
 
     @Override
+    public void writeSnapshot(final String snapshotPath, String suffix) throws Exception {
+        File file;
+        if(StringUtils.isBlank(suffix))
+            file = Paths.get(snapshotPath,"watch.snf").toFile();
+        else{
+            file = Paths.get(snapshotPath,"watch.snf."+suffix).toFile();
+        }
+        writeToFile(file);
+    }
+
+    @Override
+    public void readSnapshot(final String snapshotPath, String suffix) throws Exception {
+        File file;
+        if(StringUtils.isBlank(suffix))
+            file = Paths.get(snapshotPath,"watch.snf").toFile();
+        else{
+            file = Paths.get(snapshotPath,"watch.snf."+suffix).toFile();
+        }
+        readFromFile(file);
+    }
+
     public void writeToFile(File file) throws Exception {
         try (final FileOutputStream out = new FileOutputStream(file);
-                final BufferedOutputStream bufOutput = new BufferedOutputStream(out)) {
+             final BufferedOutputStream bufOutput = new BufferedOutputStream(out)) {
             final byte[] bytes = this.serializer.writeObject(this.listeners);
             final byte[] lenBytes = new byte[4];
             Bits.putInt(lenBytes, 0, bytes.length);
@@ -248,25 +275,24 @@ public class WatchServiceImpl implements WatchService {
         }
     }
 
-    @Override
     public void readFromFile(File file) throws Exception {
         if (!file.exists()) {
             throw new NoSuchFieldException(file.getPath());
         }
         try (final FileInputStream in = new FileInputStream(file);
-                final BufferedInputStream bufInput = new BufferedInputStream(in)) {
+             final BufferedInputStream bufInput = new BufferedInputStream(in)) {
             final byte[] lenBytes = new byte[4];
             int read = bufInput.read(lenBytes);
             if (read != lenBytes.length) {
                 throw new IOException("fail to read snapshot file length, expects " + lenBytes.length
-                                      + " bytes, but read " + read);
+                        + " bytes, but read " + read);
             }
             final int len = Bits.getInt(lenBytes, 0);
             final byte[] bytes = new byte[len];
             read = bufInput.read(bytes);
             if (read != bytes.length) {
                 throw new IOException("fail to read snapshot file, expects " + bytes.length + " bytes, but read "
-                                      + read);
+                        + read);
             }
             this.listeners = this.serializer.readObject(bytes, (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
         }
