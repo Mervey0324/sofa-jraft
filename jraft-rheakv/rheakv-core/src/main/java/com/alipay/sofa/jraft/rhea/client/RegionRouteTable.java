@@ -23,7 +23,6 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.locks.StampedLock;
 
-import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

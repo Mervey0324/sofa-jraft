@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 
-import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
