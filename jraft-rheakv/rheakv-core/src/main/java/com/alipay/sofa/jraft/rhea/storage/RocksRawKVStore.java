@@ -1210,7 +1210,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             List<WatchEvent> events = new ArrayList<>();
             RocksIterator iterator = this.db.newIterator();
             iterator.seek(startKey);
-            while (Arrays.compare(startKey, iterator.key()) >= 0 && Arrays.compare(endKey, iterator.key()) <= 0) {
+            while (BytesUtil.compare(startKey, iterator.key()) >= 0 && BytesUtil.compare(endKey, iterator.key()) <= 0) {
                 events.add(new WatchEvent(iterator.key(), iterator.value(), null, EventType.DELETE));
                 iterator.next();
             }

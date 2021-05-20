@@ -20,6 +20,5 @@ import java.io.Serializable;
 
 public interface WatchListener extends Serializable {
     void onNext(WatchEvent event);
-
     void onError(Throwable throwable);
 }

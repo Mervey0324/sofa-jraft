@@ -19,7 +19,6 @@ package com.alipay.sofa.jraft.rhea.watch;
 import com.alipay.sofa.jraft.rhea.options.WatchOptions;
 import com.alipay.sofa.jraft.rhea.serialization.Serializer;
 import com.alipay.sofa.jraft.rhea.serialization.Serializers;
-import com.alipay.sofa.jraft.rhea.storage.MemoryKVStoreSnapshotFile;
 import com.alipay.sofa.jraft.util.*;
 import com.lmax.disruptor.*;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -28,10 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 
 public class WatchServiceImpl implements WatchService {
@@ -42,16 +40,15 @@ public class WatchServiceImpl implements WatchService {
     private Disruptor<WatchEvent>      watchDisruptor;
     private RingBuffer<WatchEvent>     watchRingBuffer;
     private WatchOptions               options;
-    private Map<byte[], WatchListener> listeners;
+
+    private static final Comparator<byte[]>              COMPARATOR   = BytesUtil.getDefaultByteArrayComparator();
+    private ConcurrentNavigableMap<byte[], WatchListener> listeners;
     private volatile CountDownLatch    shutdownLatch;
 
     private final Serializer           serializer                  = Serializers.getDefault();
 
     //    private Node                       node;
     //    private NodeMetrics                nodeMetrics;
-
-    //    private boolean isLeader = false;
-    //    private ScheduledExecutorService scheduledExecutorService;
 
     private static class WatchEventFactory implements EventFactory<WatchEvent> {
         @Override
@@ -63,10 +60,6 @@ public class WatchServiceImpl implements WatchService {
     private class WatchEventHandler implements EventHandler<WatchEvent> {
         @Override
         public void onEvent(WatchEvent event, long sequence, boolean endOfBatch) throws Exception {
-            //            if(listeners.containsKey(event.getKey())) {
-            //                if(!options.isOnlyLeaderCall() || isLeader)
-            //                    listeners.get(event.getKey()).onNext(event);
-            //            }
             if (listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onNext(event);
             }
@@ -87,11 +80,7 @@ public class WatchServiceImpl implements WatchService {
         options = watchOptions;
         //        node = options.getNode();
         //        nodeMetrics = node.getNodeMetrics();
-        listeners = new ConcurrentHashMap<>();
-
-        //        this.scheduledExecutorService = Executors
-        //                .newSingleThreadScheduledExecutor(new NamedThreadFactory("WatchService-Update-Leader", true));
-
+        listeners = new ConcurrentSkipListMap<>(COMPARATOR);
         watchDisruptor = DisruptorBuilder.<WatchEvent> newInstance() //
             .setEventFactory(new WatchEventFactory()) //
             .setRingBufferSize(this.options.getDisruptorBufferSize()) //
@@ -108,15 +97,6 @@ public class WatchServiceImpl implements WatchService {
         //                .register("jraft-watch-service-disruptor", new DisruptorMetricSet(this.watchRingBuffer));
         //        }
 
-        //        this.scheduledExecutorService.scheduleAtFixedRate(() -> {
-        //                    try {
-        //                        isLeader = ServerRouteTable.getInstance().isLeader(true, 1000);
-        //                    } catch (TimeoutException | InterruptedException e) {
-        //                        log.error("JRaft WatchService refreshLeader error", e);
-        //                    }
-        //                },
-        //                1000, 1000, TimeUnit.MILLISECONDS);
-
         return true;
     }
 
@@ -128,7 +108,6 @@ public class WatchServiceImpl implements WatchService {
         this.shutdownLatch = new CountDownLatch(1);
         Utils.runInThread(() -> this.watchRingBuffer.publishEvent((event, sequence) -> {}));
         listeners.clear();
-//        this.scheduledExecutorService.shutdown();
     }
 
     public void join() throws InterruptedException {
@@ -136,7 +115,6 @@ public class WatchServiceImpl implements WatchService {
             this.shutdownLatch.await();
         }
         this.watchDisruptor.shutdown();
-        //        this.scheduledExecutorService.awaitTermination(5, TimeUnit.SECONDS);
     }
 
     @Override
@@ -162,7 +140,6 @@ public class WatchServiceImpl implements WatchService {
     @Override
     public void appendEvent(WatchEvent event) {
         if (this.shutdownLatch != null) {
-//            Utils.runClosureInThread(closure, new Status(RaftError.EHOSTDOWN, "Was stopped"));
             IllegalStateException e = new IllegalStateException("Service already shutdown.");
             if (listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onError(e);
@@ -185,8 +162,6 @@ public class WatchServiceImpl implements WatchService {
                 } else {
                     retryTimes++;
                     if (retryTimes > MAX_ADD_REQUEST_RETRY_TIMES) {
-//                        Utils.runClosureInThread(closure,
-//                                new Status(RaftError.EBUSY, "Node is busy, has too many read-only requests."));
 //                        if(nodeMetrics != null)
 //                            this.nodeMetrics.recordTimes("read-index-overload-times", 1);
 //                        LOG.warn("Node {} WatchServiceImpl watchRingBuffer is overload.", node.getNodeId());
@@ -196,11 +171,9 @@ public class WatchServiceImpl implements WatchService {
                 }
             }
         } catch (final Exception e) {
-//            Utils.runClosureInThread(closure, new Status(RaftError.EPERM, "Node is down."));
             if (listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onError(e);
             }
-//            throw e;
         }
     }
 
@@ -211,14 +184,12 @@ public class WatchServiceImpl implements WatchService {
         events.forEach(event -> keys.add(event.getKey()));
 
         if (this.shutdownLatch != null) {
-//            Utils.runClosureInThread(closure, new Status(RaftError.EHOSTDOWN, "Was stopped"));
             IllegalStateException e = new IllegalStateException("Service already shutdown.");
             keys.forEach(key -> {
                 if (listeners.containsKey(key)) {
                     listeners.get(key).onError(e);
                 }
             });
-//            throw e;
         }
         List<WatchEvent> validEvents = new ArrayList<>();
         for (WatchEvent event : events) {
@@ -244,8 +215,6 @@ public class WatchServiceImpl implements WatchService {
                     } else {
                         retryTimes++;
                         if (retryTimes > MAX_ADD_REQUEST_RETRY_TIMES) {
-//                        Utils.runClosureInThread(closure,
-//                                new Status(RaftError.EBUSY, "Node is busy, has too many read-only requests."));
 //                        if(nodeMetrics != null)
 //                            this.nodeMetrics.recordTimes("read-index-overload-times", 1);
 //                        LOG.warn("Node {} WatchServiceImpl watchRingBuffer is overload.", node.getNodeId());
@@ -255,8 +224,6 @@ public class WatchServiceImpl implements WatchService {
                     }
                 }
             } catch (final Exception e) {
-//            Utils.runClosureInThread(closure, new Status(RaftError.EPERM, "Node is down."));
-//                throw e;
                 keys.forEach(key -> {
                     if (listeners.containsKey(key)) {
                         listeners.get(key).onError(e);
@@ -300,7 +267,7 @@ public class WatchServiceImpl implements WatchService {
                 throw new IOException("fail to read snapshot file, expects " + bytes.length + " bytes, but read "
                                       + read);
             }
-            this.listeners = (HashMap<byte[], WatchListener>) this.serializer.readObject(bytes, HashMap.class);
+            this.listeners = this.serializer.readObject(bytes, (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
         }
     }
 }

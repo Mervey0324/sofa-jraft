@@ -26,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import com.alipay.sofa.jraft.rhea.storage.*;
 import com.alipay.sofa.jraft.rhea.watch.WatchEvent;
 import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import org.junit.After;
@@ -45,10 +46,6 @@ import com.alipay.sofa.jraft.rhea.client.RheaIterator;
 import com.alipay.sofa.jraft.rhea.client.RheaKVCliService;
 import com.alipay.sofa.jraft.rhea.client.RheaKVStore;
 import com.alipay.sofa.jraft.rhea.metadata.Region;
-import com.alipay.sofa.jraft.rhea.storage.CASEntry;
-import com.alipay.sofa.jraft.rhea.storage.KVEntry;
-import com.alipay.sofa.jraft.rhea.storage.Sequence;
-import com.alipay.sofa.jraft.rhea.storage.StorageType;
 import com.alipay.sofa.jraft.rhea.util.ByteArray;
 import com.alipay.sofa.jraft.rhea.util.Lists;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
@@ -1207,6 +1204,53 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
         assertEquals(12, store.bGetSequence("z_seqTest", 1).getStartValue());
     }
 
+    private List<byte[]> getWatchKeys() {
+        List<byte[]> keys = new ArrayList<>();
+        keys.add(makeKey("put_test"));
+        keys.add(makeKey("k1"));
+        keys.add(makeKey("k2"));
+        keys.add(makeKey("k3"));
+        keys.add(makeKey("key"));
+        keys.add(makeKey("u_put_if_absent_test"));
+        for (int i = 0; i < 3; i++) {
+            keys.add(makeKey("batch_put_test_key" + i));
+            keys.add(makeKey("batch_del_test_key" + i));
+        }
+        for (int i = 0; i < 10; i++) {
+            keys.add(makeKey("g_batch_put_test_key" + i));
+            keys.add(makeKey("del_test" + i));
+            keys.add(makeKey("del_range_test" + i));
+            keys.add(makeKey("g_batch_del_test_key" + i));
+        }
+        return keys;
+    }
+
+    private void putAndDelete() {
+        // put test
+        putByLeaderTest();
+        putByFollowerTest();
+        getAndPutByLeaderTest();
+        getAndPutByFollowerTest();
+        compareAndPutByLeaderTest();
+        compareAndPutByFollowerTest();
+        compareAndPutAllByLeaderTest();
+        compareAndPutAllByFollowerTest();
+        mergeByLeaderTest();
+        mergeByFollowerTest();
+        putListByLeaderTest();
+        putListByFollowerTest1();
+        putIfAbsentByLeaderTest();
+        putIfAbsentByFollowerTest();
+
+        // delete test
+        deleteByLeaderTest();
+        deleteByFollowerTest1();
+        deleteRangeByLeaderTest();
+        deleteRangeByFollowerTest();
+        deleteListByLeaderTest();
+        deleteListByFollowerTest();
+    }
+
     /**
      * Test method: {@link RheaKVStore#watch(byte[], WatchListener)}
      * Test method: {@link RheaKVStore#unwatch(byte[])}
@@ -1233,43 +1277,29 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
             }
         };
 
-        //  watch values
-        // regions: 1 -> [null, g), 2 -> [g, null)
-        for (int i = 0; i < 3; i++) {
-            byte[] key = makeKey("batch_put_test_key" + i);
-            checkRegion(store, key, 1);
-            store.watch(key, listener);
-        }
+        WatchListener listener1 = new WatchListenerImpl();
 
-        for (int i = 0; i < 10; i++) {
-            byte[] key = makeKey("g_batch_put_test_key" + i);
-            checkRegion(store, key, 2);
-            store.watch(key, listener);
-        }
+        /********************** watch keys **********************/
+        List<byte[]> keys = getWatchKeys();
+        keys.forEach(k -> store.bWatch(k, listener1));
+        System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>keys watched<<<<<<<<<<<<<<<<<<<<<<");
 
-        // put&delete
-        deleteListTest(store);
+        putAndDelete();
 
-        // unwatch values
-        // regions: 1 -> [null, g), 2 -> [g, null)
-        for (int i = 0; i < 3; i++) {
-            byte[] key = makeKey("batch_put_test_key" + i);
-            checkRegion(store, key, 1);
-            store.unwatch(key);
-        }
+        /********************** unwatch keys **********************/
+        keys.forEach(store::bUnwatch);
+        System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>keys unwatched<<<<<<<<<<<<<<<<<<<<<<");
 
-        for (int i = 0; i < 10; i++) {
-            byte[] key = makeKey("g_batch_put_test_key" + i);
-            checkRegion(store, key, 2);
-            store.unwatch(key);
-        }
-
-        // put&delete
-        deleteListTest(store);
+        putAndDelete();
     }
 
     @Test
     public void watchByLeaderTest() {
         watchTest(getRandomLeaderStore());
+    }
+
+    @Test
+    public void watchByFollowerTest() {
+        watchTest(getRandomFollowerStore());
     }
 }

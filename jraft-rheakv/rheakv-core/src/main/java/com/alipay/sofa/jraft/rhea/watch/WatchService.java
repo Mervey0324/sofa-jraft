@@ -26,22 +26,18 @@ import java.util.Map;
 public interface WatchService extends Lifecycle<WatchOptions> {
     // listener api
     void addListener(byte[] key, WatchListener listener);
-
     void addListeners(Map<byte[], WatchListener> listeners);
-
     void removeListener(byte[] key);
-
     Map<byte[], WatchListener> getListeners();
 
     // append event
     void appendEvent(WatchEvent event);
-
     void appendEvents(List<WatchEvent> events);
 
     // snapshot api
     void writeToFile(File file) throws Exception;
-
     void readFromFile(File file) throws Exception;
 
+    // other
     void join() throws InterruptedException;
 }

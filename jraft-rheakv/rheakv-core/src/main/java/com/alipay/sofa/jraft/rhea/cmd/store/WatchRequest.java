@@ -25,7 +25,7 @@ import com.alipay.sofa.jraft.util.BytesUtil;
  */
 public class WatchRequest extends BaseRequest {
 
-    private static final long serialVersionUID = 5937066725083445707L;
+    private static final long serialVersionUID = 5937066725083445708L;
 
     private byte[]            key;
     private WatchListener     listener;

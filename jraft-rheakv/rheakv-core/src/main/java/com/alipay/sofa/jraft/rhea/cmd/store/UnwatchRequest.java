@@ -16,7 +16,6 @@
  */
 package com.alipay.sofa.jraft.rhea.cmd.store;
 
-import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import com.alipay.sofa.jraft.util.BytesUtil;
 
 /**
@@ -25,7 +24,7 @@ import com.alipay.sofa.jraft.util.BytesUtil;
  */
 public class UnwatchRequest extends BaseRequest {
 
-    private static final long serialVersionUID = 5937066725083445707L;
+    private static final long serialVersionUID = 5937066725083445709L;
 
     private byte[]            key;
 
