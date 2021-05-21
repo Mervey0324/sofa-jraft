@@ -70,10 +70,11 @@ import static org.junit.Assert.assertTrue;
 public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
 
     public abstract StorageType getStorageType();
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractRheaKVStoreTest.class);
+
+    private static final Logger LOG      = LoggerFactory.getLogger(AbstractRheaKVStoreTest.class);
 
     @Rule
-    public TestName testName = new TestName();
+    public TestName             testName = new TestName();
 
     @Before
     public void setup() throws Exception {
@@ -1231,12 +1232,12 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
     private void putAndDelete() {
         // put test
         putByLeaderTest();
-//        getAndPutByLeaderTest();
-//        compareAndPutByLeaderTest();
+        //        getAndPutByLeaderTest();
+        //        compareAndPutByLeaderTest();
         compareAndPutAllByLeaderTest();
         mergeByLeaderTest();
         putListByLeaderTest();
-//        putIfAbsentByLeaderTest();
+        //        putIfAbsentByLeaderTest();
 
         // delete test
         deleteByLeaderTest();

@@ -248,10 +248,10 @@ public class WatchServiceImpl implements WatchService {
     @Override
     public void writeSnapshot(final String snapshotPath, String suffix) throws Exception {
         File file;
-        if(StringUtils.isBlank(suffix))
-            file = Paths.get(snapshotPath,"watch.snf").toFile();
-        else{
-            file = Paths.get(snapshotPath,"watch.snf."+suffix).toFile();
+        if (StringUtils.isBlank(suffix))
+            file = Paths.get(snapshotPath, "watch.snf").toFile();
+        else {
+            file = Paths.get(snapshotPath, "watch.snf." + suffix).toFile();
         }
         writeToFile(file);
     }
@@ -259,17 +259,17 @@ public class WatchServiceImpl implements WatchService {
     @Override
     public void readSnapshot(final String snapshotPath, String suffix) throws Exception {
         File file;
-        if(StringUtils.isBlank(suffix))
-            file = Paths.get(snapshotPath,"watch.snf").toFile();
-        else{
-            file = Paths.get(snapshotPath,"watch.snf."+suffix).toFile();
+        if (StringUtils.isBlank(suffix))
+            file = Paths.get(snapshotPath, "watch.snf").toFile();
+        else {
+            file = Paths.get(snapshotPath, "watch.snf." + suffix).toFile();
         }
         readFromFile(file);
     }
 
     public void writeToFile(File file) throws Exception {
         try (final FileOutputStream out = new FileOutputStream(file);
-             final BufferedOutputStream bufOutput = new BufferedOutputStream(out)) {
+                final BufferedOutputStream bufOutput = new BufferedOutputStream(out)) {
             final byte[] bytes = this.serializer.writeObject(this.listeners);
             final byte[] lenBytes = new byte[4];
             Bits.putInt(lenBytes, 0, bytes.length);
@@ -285,21 +285,22 @@ public class WatchServiceImpl implements WatchService {
             throw new NoSuchFieldException(file.getPath());
         }
         try (final FileInputStream in = new FileInputStream(file);
-             final BufferedInputStream bufInput = new BufferedInputStream(in)) {
+                final BufferedInputStream bufInput = new BufferedInputStream(in)) {
             final byte[] lenBytes = new byte[4];
             int read = bufInput.read(lenBytes);
             if (read != lenBytes.length) {
                 throw new IOException("fail to read snapshot file length, expects " + lenBytes.length
-                        + " bytes, but read " + read);
+                                      + " bytes, but read " + read);
             }
             final int len = Bits.getInt(lenBytes, 0);
             final byte[] bytes = new byte[len];
             read = bufInput.read(bytes);
             if (read != bytes.length) {
                 throw new IOException("fail to read snapshot file, expects " + bytes.length + " bytes, but read "
-                        + read);
+                                      + read);
             }
-            this.listeners = this.serializer.readObject(bytes, (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
+            this.listeners = this.serializer.readObject(bytes,
+                (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
         }
     }
 }
