@@ -19,12 +19,8 @@ package com.alipay.sofa.jraft.rhea.storage;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-
-import com.alipay.sofa.jraft.Node;
-import com.alipay.sofa.jraft.rhea.watch.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import com.alipay.sofa.jraft.Closure;
 import com.alipay.sofa.jraft.Iterator;
 import com.alipay.sofa.jraft.Status;
@@ -69,13 +65,11 @@ public class KVStoreStateMachine extends StateMachineAdapter {
     private final KVStoreSnapshotFile storeSnapshotFile;
     private final Meter               applyMeter;
     private final Histogram           batchWriteHistogram;
-    private final WatchService        watchService;
 
     public KVStoreStateMachine(Region region, StoreEngine storeEngine) {
         this.region = region;
         this.storeEngine = storeEngine;
         this.rawKVStore = storeEngine.getRawKVStore();
-        this.watchService = storeEngine.getWatchService();
         this.storeSnapshotFile = KVStoreSnapshotFileFactory.getKVStoreSnapshotFile(this.rawKVStore);
         final String regionStr = String.valueOf(this.region.getId());
         this.applyMeter = KVMetrics.meter(STATE_MACHINE_APPLY_QPS, regionStr);
@@ -222,12 +216,6 @@ public class KVStoreStateMachine extends StateMachineAdapter {
             case KVOperation.RANGE_SPLIT:
                 doSplit(kvStates);
                 break;
-            case KVOperation.WATCH:
-                doWatch(kvStates);
-                break;
-            case KVOperation.UNWATCH:
-                doUnwatch(kvStates);
-                break;
             default:
                 throw new IllegalKVOperationException("Unknown operation: " + opType);
         }
@@ -252,48 +240,6 @@ public class KVStoreStateMachine extends StateMachineAdapter {
             } catch (final Throwable t) {
                 LOG.error("Fail to split, regionId={}, newRegionId={}, splitKey={}.", currentRegionId, newRegionId,
                     BytesUtil.toHex(splitKey));
-                setCriticalError(closure, t);
-            }
-        }
-    }
-
-    private void doWatch(final KVStateOutputList kvStates) {
-        LOG.info(">>>>>>>>> enter KVStoreStateMachine.doWatch");
-        for (final KVState kvState : kvStates) {
-            final KVOperation op = kvState.getOp();
-            final long regionId = this.region.getId();
-            final KVStoreClosure closure = kvState.getDone();
-            byte[] key = op.getKey();
-            WatchListener listener = op.getListener();
-            try {
-                this.watchService.addListener(key, listener);
-                if (closure != null) {
-                    // null on follower
-                    closure.setData(Boolean.TRUE);
-                    closure.run(Status.OK());
-                }
-            } catch (final Throwable t) {
-                LOG.error("Fail to watch, regionId={}, , watchKey={}.", regionId, BytesUtil.toHex(key));
-                setCriticalError(closure, t);
-            }
-        }
-    }
-
-    private void doUnwatch(final KVStateOutputList kvStates) {
-        for (final KVState kvState : kvStates) {
-            final KVOperation op = kvState.getOp();
-            final long regionId = this.region.getId();
-            final KVStoreClosure closure = kvState.getDone();
-            byte[] key = op.getKey();
-            try {
-                watchService.removeListener(key);
-                if (closure != null) {
-                    // null on follower
-                    closure.setData(Boolean.TRUE);
-                    closure.run(Status.OK());
-                }
-            } catch (final Throwable t) {
-                LOG.error("Fail to unwatch, regionId={}, , watchKey={}.", regionId, BytesUtil.toHex(key));
                 setCriticalError(closure, t);
             }
         }

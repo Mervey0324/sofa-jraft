@@ -16,7 +16,6 @@
  */
 package com.alipay.sofa.jraft.rhea.watch;
 
-import com.alipay.sofa.jraft.rhea.metadata.Region;
 import com.alipay.sofa.jraft.rhea.options.WatchOptions;
 import com.alipay.sofa.jraft.rhea.serialization.Serializer;
 import com.alipay.sofa.jraft.rhea.serialization.Serializers;
@@ -27,14 +26,12 @@ import com.lmax.disruptor.dsl.ProducerType;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 
 public class WatchServiceImpl implements WatchService {
 
@@ -47,12 +44,10 @@ public class WatchServiceImpl implements WatchService {
 
     private static final Comparator<byte[]>              COMPARATOR   = BytesUtil.getDefaultByteArrayComparator();
     private ConcurrentNavigableMap<byte[], WatchListener> listeners;
+    private ConcurrentNavigableMap<byte[], WatchListener> prefixListeners;
     private volatile CountDownLatch    shutdownLatch;
 
     private final Serializer           serializer                  = Serializers.getDefault();
-
-    //    private Node                       node;
-    //    private NodeMetrics                nodeMetrics;
 
     private static class WatchEventFactory implements EventFactory<WatchEvent> {
         @Override
@@ -69,6 +64,13 @@ public class WatchServiceImpl implements WatchService {
             if (!listeners.isEmpty() && listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onNext(event);
                 LOG.info(">>>>>>>>> execute listener onNext end.");
+            }
+            if (!prefixListeners.isEmpty()) {
+                prefixListeners.keySet().forEach(key -> {
+                    if(BytesUtil.isPrefix(event.getKey(), key))
+                        prefixListeners.get(key).onNext(event);
+                });
+                LOG.info(">>>>>>>>> execute prefix listener onNext end.");
             }
         }
     }
@@ -87,6 +89,7 @@ public class WatchServiceImpl implements WatchService {
         //        node = options.getNode();
         //        nodeMetrics = node.getNodeMetrics();
         listeners = new ConcurrentSkipListMap<>(COMPARATOR);
+        prefixListeners = new ConcurrentSkipListMap<>(COMPARATOR);
         watchDisruptor = DisruptorBuilder.<WatchEvent> newInstance() //
             .setEventFactory(new WatchEventFactory()) //
             .setRingBufferSize(this.options.getDisruptorBufferSize()) //
@@ -97,11 +100,6 @@ public class WatchServiceImpl implements WatchService {
         watchDisruptor.handleEventsWith(new WatchEventHandler());
         watchDisruptor.setDefaultExceptionHandler(new LogExceptionHandler<Object>(getClass().getSimpleName()));
         watchRingBuffer = watchDisruptor.start();
-
-        //        if (nodeMetrics != null && nodeMetrics.getMetricRegistry() != null) {
-        //            this.nodeMetrics.getMetricRegistry() //
-        //                .register("jraft-watch-service-disruptor", new DisruptorMetricSet(this.watchRingBuffer));
-        //        }
 
         return true;
     }
@@ -124,37 +122,79 @@ public class WatchServiceImpl implements WatchService {
     }
 
     @Override
-    public void addListener(byte[] key, WatchListener listener) {
-        this.listeners.put(key, listener);
+    public void addListener(byte[] key, WatchListener listener, boolean prefix) {
+        if(prefix)
+            this.prefixListeners.put(key, listener);
+        else
+            this.listeners.put(key, listener);
     }
 
     @Override
-    public void addListeners(Map<byte[], WatchListener> listeners) {
-        this.listeners.putAll(listeners);
-    }
-
-    @Override
-    public Map<byte[], WatchListener> getListeners() {
-        return this.listeners;
+    public void addListeners(List<AddListener> listeners) {
+        listeners.forEach(listener -> {
+            if (listener.isPrefix())
+                this.prefixListeners.put(listener.getKey(), listener.getListener());
+            else
+                this.listeners.put(listener.getKey(), listener.getListener());
+        });
     }
 
     @Override
     public void removeListener(byte[] key) {
+        this.prefixListeners.remove(key);
         this.listeners.remove(key);
+    }
+
+    @Override
+    public void removeListeners() {
+        this.prefixListeners.clear();
+        this.listeners.clear();
+    }
+
+    @Override
+    public boolean isWatched(byte[] key) {
+        if(listeners.containsKey(key))
+            return true;
+        for (byte[] k : prefixListeners.keySet()) {
+            if(BytesUtil.isPrefix(key, k))
+                return true;
+        }
+        return false;
+    }
+
+    @Override
+    public Set<byte[]> getWatchedKeys(List<byte[]> keys) {
+        Set<byte[]> watchedKeys = new HashSet<>();
+        for (byte[] key : keys) {
+            if(listeners.containsKey(key)) {
+                watchedKeys.add(key);
+                continue;
+            }
+            for (byte[] prefixKey : prefixListeners.keySet()) {
+                if(BytesUtil.isPrefix(key, prefixKey)){
+                    watchedKeys.add(key);
+                    break;
+                }
+            }
+        }
+        return watchedKeys;
     }
 
     @Override
     public void appendEvent(WatchEvent event) {
         LOG.info("append watch event, event is {}", event);
+
         if (this.shutdownLatch != null) {
             IllegalStateException e = new IllegalStateException("Service already shutdown.");
             if (listeners.containsKey(event.getKey())) {
                 listeners.get(event.getKey()).onError(e);
             }
-//            throw e;
+            prefixListeners.keySet().forEach(key -> {
+                if(BytesUtil.isPrefix(event.getKey(), key))
+                    prefixListeners.get(key).onError(e);
+            });
         }
-        if(!this.listeners.containsKey(event.getKey()))
-            return;
+
         try {
             EventTranslator<WatchEvent> translator = (newEvent, sequence) -> {
                 newEvent.setEventType(event.getEventType());
@@ -169,9 +209,6 @@ public class WatchServiceImpl implements WatchService {
                 } else {
                     retryTimes++;
                     if (retryTimes > MAX_ADD_REQUEST_RETRY_TIMES) {
-//                        if(nodeMetrics != null)
-//                            this.nodeMetrics.recordTimes("read-index-overload-times", 1);
-//                        LOG.warn("Node {} WatchServiceImpl watchRingBuffer is overload.", node.getNodeId());
                         return;
                     }
                     ThreadHelper.onSpinWait();
@@ -222,9 +259,6 @@ public class WatchServiceImpl implements WatchService {
                     } else {
                         retryTimes++;
                         if (retryTimes > MAX_ADD_REQUEST_RETRY_TIMES) {
-//                        if(nodeMetrics != null)
-//                            this.nodeMetrics.recordTimes("read-index-overload-times", 1);
-//                        LOG.warn("Node {} WatchServiceImpl watchRingBuffer is overload.", node.getNodeId());
                             return;
                         }
                         ThreadHelper.onSpinWait();
@@ -238,11 +272,6 @@ public class WatchServiceImpl implements WatchService {
                 });
             }
         }
-    }
-
-    @Override
-    public boolean isWatched(byte[] key) {
-        return listeners.containsKey(key);
     }
 
     @Override

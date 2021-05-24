@@ -654,63 +654,6 @@ public class DefaultRegionKVService implements RegionKVService {
 
     }
 
-    @Override
-    public void handleWatchRequest(final WatchRequest request,
-                                   final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure) {
-        final WatchResponse response = new WatchResponse();
-        response.setRegionId(getRegionId());
-        response.setRegionEpoch(getRegionEpoch());
-        try {
-            KVParameterRequires.requireSameEpoch(request, getRegionEpoch());
-            final byte[] key = KVParameterRequires.requireNonNull(request.getKey(), "watch.key");
-            final WatchListener listener = KVParameterRequires.requireNonNull(request.getListener(), "watch.listener");
-            this.rawKVStore.watch(key, listener, new BaseKVStoreClosure() {
-
-                @Override
-                public void run(final Status status) {
-                    if (status.isOk()) {
-                        response.setValue((Boolean) getData());
-                    } else {
-                        setFailure(request, response, status, getError());
-                    }
-                    closure.sendResponse(response);
-                }
-            });
-        } catch (final Throwable t) {
-            LOG.error("Failed to handle: {}, {}.", request, StackTraceUtil.stackTrace(t));
-            response.setError(Errors.forException(t));
-            closure.sendResponse(response);
-        }
-    }
-
-    @Override
-    public void handleUnwatchRequest(final UnwatchRequest request,
-                                     final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure) {
-        final UnwatchResponse response = new UnwatchResponse();
-        response.setRegionId(getRegionId());
-        response.setRegionEpoch(getRegionEpoch());
-        try {
-            KVParameterRequires.requireSameEpoch(request, getRegionEpoch());
-            final byte[] key = KVParameterRequires.requireNonNull(request.getKey(), "watch.key");
-            this.rawKVStore.unwatch(key, new BaseKVStoreClosure() {
-
-                @Override
-                public void run(final Status status) {
-                    if (status.isOk()) {
-                        response.setValue((Boolean) getData());
-                    } else {
-                        setFailure(request, response, status, getError());
-                    }
-                    closure.sendResponse(response);
-                }
-            });
-        } catch (final Throwable t) {
-            LOG.error("Failed to handle: {}, {}.", request, StackTraceUtil.stackTrace(t));
-            response.setError(Errors.forException(t));
-            closure.sendResponse(response);
-        }
-    }
-
     private static void setFailure(final BaseRequest request, final BaseResponse<?> response, final Status status,
                                    final Errors error) {
         response.setError(error == null ? Errors.STORAGE_ERROR : error);

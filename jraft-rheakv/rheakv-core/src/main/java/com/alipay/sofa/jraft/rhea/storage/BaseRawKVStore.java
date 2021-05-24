@@ -17,11 +17,8 @@
 package com.alipay.sofa.jraft.rhea.storage;
 
 import java.util.List;
-
-import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import com.alipay.sofa.jraft.Lifecycle;
 import com.alipay.sofa.jraft.Status;
 import com.alipay.sofa.jraft.error.RaftError;
@@ -263,15 +260,5 @@ public abstract class BaseRawKVStore<T> implements RawKVStore, Lifecycle<T> {
      */
     static Object getData(final KVStoreClosure closure) {
         return closure == null ? null : closure.getData();
-    }
-
-    @Override
-    public void watch(byte[] key, WatchListener listener, KVStoreClosure closure) {
-
-    }
-
-    @Override
-    public void unwatch(byte[] key, KVStoreClosure closure) {
-
     }
 }

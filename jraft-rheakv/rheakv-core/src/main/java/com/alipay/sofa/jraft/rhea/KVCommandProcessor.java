@@ -17,7 +17,6 @@
 package com.alipay.sofa.jraft.rhea;
 
 import java.util.concurrent.Executor;
-
 import com.alipay.sofa.jraft.rhea.cmd.store.*;
 import com.alipay.sofa.jraft.rhea.errors.Errors;
 import com.alipay.sofa.jraft.rhea.errors.RheaRuntimeException;
@@ -113,12 +112,6 @@ public class KVCommandProcessor<T extends BaseRequest> implements RpcProcessor<T
                 break;
             case BaseRequest.COMPARE_PUT_ALL:
                 regionKVService.handleCompareAndPutAll((CASAllRequest) request, closure);
-                break;
-            case BaseRequest.WATCH:
-                regionKVService.handleWatchRequest((WatchRequest) request, closure);
-                break;
-            case BaseRequest.UNWATCH:
-                regionKVService.handleUnwatchRequest((UnwatchRequest) request, closure);
                 break;
             default:
                 throw new RheaRuntimeException("Unsupported request type: " + request.getClass().getName());

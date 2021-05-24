@@ -18,10 +18,8 @@ package com.alipay.sofa.jraft.rhea.storage;
 
 import java.io.Serializable;
 import java.util.List;
-
 import com.alipay.sofa.jraft.rhea.util.Pair;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
-import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import com.alipay.sofa.jraft.util.BytesUtil;
 import com.alipay.sofa.jraft.util.Requires;
 
@@ -83,10 +81,7 @@ public class KVOperation implements Serializable {
     /** Compare and put all */
     public static final byte    COMPARE_PUT_ALL  = 0x15;
 
-    public static final byte    WATCH            = 0x16;
-    public static final byte    UNWATCH          = 0x17;
-
-    public static final byte    EOF              = 0x18;
+    public static final byte    EOF              = 0x16;
 
     private static final byte[] VALID_OPS;
 
@@ -113,14 +108,11 @@ public class KVOperation implements Serializable {
         VALID_OPS[18] = CONTAINS_KEY;
         VALID_OPS[19] = REVERSE_SCAN;
         VALID_OPS[20] = COMPARE_PUT_ALL;
-        VALID_OPS[21] = WATCH;
-        VALID_OPS[21] = UNWATCH;
     }
 
     private byte[]              key;                                    // also startKey for DELETE_RANGE
     private byte[]              value;                                  // also endKey for DELETE_RANGE
     private Object              attach;
-    private WatchListener       listener;
 
     private byte                op;
 
@@ -255,17 +247,6 @@ public class KVOperation implements Serializable {
         return new KVOperation(BytesUtil.EMPTY_BYTES, BytesUtil.EMPTY_BYTES, entries, COMPARE_PUT_ALL);
     }
 
-    public static KVOperation createWatch(final byte[] key, final WatchListener listener) {
-        Requires.requireNonNull(key, "key");
-        Requires.requireNonNull(listener, "listener");
-        return new KVOperation(key, listener, null, WATCH);
-    }
-
-    public static KVOperation createUnwatch(final byte[] key) {
-        Requires.requireNonNull(key, "key");
-        return new KVOperation(key, null, UNWATCH);
-    }
-
     public KVOperation() {
     }
 
@@ -278,13 +259,6 @@ public class KVOperation implements Serializable {
     public KVOperation(byte[] key, byte[] value, Object attach, byte op) {
         this.key = key;
         this.value = value;
-        this.attach = attach;
-        this.op = op;
-    }
-
-    public KVOperation(byte[] key, WatchListener listener, Object attach, byte op) {
-        this.key = key;
-        this.listener = listener;
         this.attach = attach;
         this.op = op;
     }
@@ -303,10 +277,6 @@ public class KVOperation implements Serializable {
 
     public byte[] getValue() {
         return value;
-    }
-
-    public WatchListener getListener() {
-        return listener;
     }
 
     public byte[] getEndKey() {
@@ -440,8 +410,6 @@ public class KVOperation implements Serializable {
                 return "REVERSE_SCAN";
             case COMPARE_PUT_ALL:
                 return "COMPARE_PUT_ALL";
-            case WATCH:
-                return "WATCH";
             default:
                 return "UNKNOWN" + op;
         }

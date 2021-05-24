@@ -760,20 +760,8 @@ public interface RheaKVStore extends Lifecycle<RheaKVStoreOptions> {
      * @return {@code true} if success.
      */
     CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener);
-
-    /**
-     * @see #watch(byte[], WatchListener)
-     */
     CompletableFuture<Boolean> watch(final String key, final WatchListener listener);
-
-    /**
-     * @see #watch(byte[], WatchListener)
-     */
     Boolean bWatch(final byte[] key, final WatchListener listener);
-
-    /**
-     * @see #watch(byte[], WatchListener)
-     */
     Boolean bWatch(final String key, final WatchListener listener);
 
     /**
@@ -783,19 +771,12 @@ public interface RheaKVStore extends Lifecycle<RheaKVStoreOptions> {
      * @return {@code true} if success.
      */
     CompletableFuture<Boolean> unwatch(final byte[] key);
-
-    /**
-     * @see #unwatch(byte[])
-     */
     CompletableFuture<Boolean> unwatch(final String key);
-
-    /**
-     * @see #unwatch(byte[])
-     */
     Boolean bUnwatch(final byte[] key);
-
-    /**
-     * @see #unwatch(byte[])
-     */
     Boolean bUnwatch(final String key);
+
+    CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener, boolean prefix);
+    Boolean bWatch(final byte[] key, final WatchListener listener, boolean prefix);
+    CompletableFuture<Boolean> watch(final String key, final WatchListener listener, boolean prefix);
+    Boolean bWatch(final String key, final WatchListener listener, boolean prefix);
 }

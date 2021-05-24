@@ -6,8 +6,12 @@ import com.alipay.sofa.jraft.util.BytesUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 public class WatchListenerImpl implements WatchListener {
     private static final Logger LOG = LoggerFactory.getLogger(WatchListenerImpl.class);
+    private final AtomicInteger nextCount = new AtomicInteger(0);
+    private final AtomicInteger errorCount = new AtomicInteger(0);
 
     @Override
     public void onNext(WatchEvent event) {
@@ -17,12 +21,20 @@ public class WatchListenerImpl implements WatchListener {
                 event.getValue() == null?"null":BytesUtil.readUtf8(event.getValue()),
                 event.getEventType().name()
         );
+        nextCount.incrementAndGet();
     }
 
     @Override
     public void onError(Throwable throwable) {
-        String msg = ">>>>>>>>>>>>>>> watch listener onError is called! "
-                + "\nerror is " + throwable.toString();
-        System.out.println(msg);
+        LOG.warn(">>>>>>>>>>>>>>> watch listener onError is called!", throwable);
+        errorCount.incrementAndGet();
+    }
+
+    @Override
+    public String toString() {
+        return "WatchListenerImpl{" +
+                "nextCount=" + nextCount.get() +
+                ", errorCount=" + errorCount.get() +
+                '}';
     }
 }

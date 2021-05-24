@@ -21,7 +21,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.stream.Collectors;
 
 import com.alipay.sofa.jraft.rhea.watch.EventType;
 import com.alipay.sofa.jraft.rhea.watch.WatchEvent;
@@ -256,12 +255,8 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void put(final byte[] key, final byte[] value, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("PUT");
         try {
-            byte[] preVal = this.defaultDB.getOrDefault(key, null);
-            this.defaultDB.put(key, value);
-
-            // append watch event
+            byte[] preVal = this.defaultDB.put(key, value);
             this.watchService.appendEvent(new WatchEvent(key, preVal, value, EventType.PUT));
-
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [PUT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -277,10 +272,7 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
         final Timer.Context timeCtx = getTimeContext("GET_PUT");
         try {
             final byte[] prevVal = this.defaultDB.put(key, value);
-
-            // append watch event
             this.watchService.appendEvent(new WatchEvent(key, prevVal, value, EventType.PUT));
-
             setSuccess(closure, prevVal);
         } catch (final Exception e) {
             LOG.error("Fail to [GET_PUT], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -298,10 +290,7 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             final byte[] actual = this.defaultDB.get(key);
             if (Arrays.equals(expect, actual)) {
                 this.defaultDB.put(key, update);
-
-                // append watch event
                 this.watchService.appendEvent(new WatchEvent(key, actual, update, EventType.PUT));
-
                 setSuccess(closure, Boolean.TRUE);
             } else {
                 setSuccess(closure, Boolean.FALSE);
@@ -319,17 +308,22 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void merge(final byte[] key, final byte[] value, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("MERGE");
         try {
+            WatchEvent event = WatchEvent.builder().eventType(EventType.PUT).key(key).build();
             this.defaultDB.compute(key, (ignored, oldVal) -> {
+                event.setPreValue(oldVal);
                 if (oldVal == null) {
+                    event.setValue(value);
                     return value;
                 } else {
                     final byte[] newVal = new byte[oldVal.length + 1 + value.length];
                     System.arraycopy(oldVal, 0, newVal, 0, oldVal.length);
                     newVal[oldVal.length] = DELIMITER;
                     System.arraycopy(value, 0, newVal, oldVal.length + 1, value.length);
+                    event.setValue(newVal);
                     return newVal;
                 }
             });
+            watchService.appendEvent(event);
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
             LOG.error("Fail to [MERGE], [{}, {}], {}.", BytesUtil.toHex(key), BytesUtil.toHex(value),
@@ -346,9 +340,8 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
         try {
             List<WatchEvent> events = new ArrayList<>();
             for (final KVEntry entry : entries) {
-                events.add(new WatchEvent(entry.getKey(), this.defaultDB.getOrDefault(entry.getKey(), null), entry
-                    .getValue(), EventType.PUT));
-                this.defaultDB.put(entry.getKey(), entry.getValue());
+                byte[] preVal = this.defaultDB.put(entry.getKey(), entry.getValue());
+                events.add(new WatchEvent(entry.getKey(), preVal, entry.getValue(), EventType.PUT));
             }
             this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);
@@ -660,15 +653,11 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
     public void delete(final byte[] key, final KVStoreClosure closure) {
         final Timer.Context timeCtx = getTimeContext("DELETE");
         try {
-            byte[] preVal = this.defaultDB.getOrDefault(key, null);
-            this.defaultDB.remove(key);
+            byte[] preVal = this.defaultDB.remove(key);
 
             // append watch event
-            WatchEvent event = new WatchEvent();
-            event.setEventType(EventType.DELETE);
-            event.setPreValue(preVal);
-            event.setKey(key);
-            this.watchService.appendEvent(event);
+            if(preVal != null)
+                this.watchService.appendEvent(new WatchEvent(key, preVal, null, EventType.DELETE));
 
             setSuccess(closure, Boolean.TRUE);
         } catch (final Exception e) {
@@ -709,8 +698,9 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
         try {
             List<WatchEvent> events = new ArrayList<>();
             for (final byte[] key : keys) {
-                events.add(new WatchEvent(key, this.defaultDB.getOrDefault(key, null), null, EventType.DELETE));
-                this.defaultDB.remove(key);
+                byte[] preVal = this.defaultDB.remove(key);
+                if(preVal != null)
+                    events.add(new WatchEvent(key, preVal, null, EventType.DELETE));
             }
             this.watchService.appendEvents(events);
             setSuccess(closure, Boolean.TRUE);

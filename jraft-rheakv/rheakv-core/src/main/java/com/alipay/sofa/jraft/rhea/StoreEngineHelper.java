@@ -24,7 +24,6 @@ import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-
 import com.alipay.sofa.jraft.rhea.cmd.store.*;
 import com.alipay.sofa.jraft.rhea.util.concurrent.CallerRunsPolicyWithReport;
 import com.alipay.sofa.jraft.rhea.util.concurrent.NamedThreadFactory;
@@ -92,8 +91,6 @@ public final class StoreEngineHelper {
         rpcServer.registerProcessor(new KVCommandProcessor<>(NodeExecuteRequest.class, engine));
         rpcServer.registerProcessor(new KVCommandProcessor<>(RangeSplitRequest.class, engine));
         rpcServer.registerProcessor(new KVCommandProcessor<>(CASAllRequest.class, engine));
-        rpcServer.registerProcessor(new KVCommandProcessor<>(WatchRequest.class, engine));
-        rpcServer.registerProcessor(new KVCommandProcessor<>(UnwatchRequest.class, engine));
     }
 
     private static ExecutorService newPool(final int coreThreads, final int maxThreads, final String name) {
