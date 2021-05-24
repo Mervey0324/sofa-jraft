@@ -17,7 +17,6 @@
 package com.alipay.sofa.jraft.rhea.storage.rhea;
 
 import com.alipay.sofa.jraft.rhea.storage.StorageType;
-import org.junit.Test;
 
 /**
  *
@@ -28,15 +27,5 @@ public class RheaKVStoreWithRocksDBTest extends AbstractRheaKVStoreTest {
     @Override
     public StorageType getStorageType() {
         return StorageType.RocksDB;
-    }
-
-    @Test
-    public void watchByLeaderTest() {
-        super.watchByLeaderTest();
-    }
-
-    @Test
-    public void watchByFollowerTest() {
-        super.watchByFollowerTest();
     }
 }

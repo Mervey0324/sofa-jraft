@@ -18,6 +18,7 @@ package com.alipay.sofa.jraft.rhea.storage;
 
 import java.io.Serializable;
 import java.util.List;
+
 import com.alipay.sofa.jraft.rhea.util.Pair;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
 import com.alipay.sofa.jraft.util.BytesUtil;
@@ -248,12 +249,6 @@ public class KVOperation implements Serializable {
     }
 
     public KVOperation() {
-    }
-
-    public KVOperation(byte[] key, Object attach, byte op) {
-        this.key = key;
-        this.attach = attach;
-        this.op = op;
     }
 
     public KVOperation(byte[] key, byte[] value, Object attach, byte op) {

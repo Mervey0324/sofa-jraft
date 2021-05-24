@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.alipay.sofa.jraft.rhea.cmd.store.*;
-import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
