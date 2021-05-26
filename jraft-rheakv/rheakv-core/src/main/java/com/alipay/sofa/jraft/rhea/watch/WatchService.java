@@ -25,20 +25,26 @@ import java.util.Set;
 public interface WatchService extends Lifecycle<WatchOptions> {
     // listener api
     void addListener(byte[] key, WatchListener listener, boolean prefix);
+
     void addListeners(List<AddListener> listeners);
+
     void removeListener(byte[] key);
+
     void removeListeners();
 
     // append event
     void appendEvent(WatchEvent event);
+
     void appendEvents(List<WatchEvent> events);
 
     // snapshot api
     void writeSnapshot(String snapshotPath, String suffix) throws Exception;
+
     void readSnapshot(String snapshotPath, String suffix) throws Exception;
 
     // watch
     boolean isWatched(byte[] key);
+
     Set<byte[]> getWatchedKeys(List<byte[]> keys);
 
     // other

@@ -35,19 +35,21 @@ import java.util.concurrent.CountDownLatch;
 
 public class WatchServiceImpl implements WatchService {
 
-    private static final int           MAX_ADD_REQUEST_RETRY_TIMES = 3;
-    private static final Logger        LOG                         = LoggerFactory.getLogger(WatchServiceImpl.class);
+    private static final int                              MAX_ADD_REQUEST_RETRY_TIMES = 3;
+    private static final Logger                           LOG                         = LoggerFactory
+                                                                                          .getLogger(WatchServiceImpl.class);
 
-    private Disruptor<WatchEvent>      watchDisruptor;
-    private RingBuffer<WatchEvent>     watchRingBuffer;
-    private WatchOptions               options;
+    private Disruptor<WatchEvent>                         watchDisruptor;
+    private RingBuffer<WatchEvent>                        watchRingBuffer;
+    private WatchOptions                                  options;
 
-    private static final Comparator<byte[]>              COMPARATOR   = BytesUtil.getDefaultByteArrayComparator();
+    private static final Comparator<byte[]>               COMPARATOR                  = BytesUtil
+                                                                                          .getDefaultByteArrayComparator();
     private ConcurrentNavigableMap<byte[], WatchListener> listeners;
     private ConcurrentNavigableMap<byte[], WatchListener> prefixListeners;
-    private volatile CountDownLatch    shutdownLatch;
+    private volatile CountDownLatch                       shutdownLatch;
 
-    private final Serializer           serializer                  = Serializers.getDefault();
+    private final Serializer                              serializer                  = Serializers.getDefault();
 
     private static class WatchEventFactory implements EventFactory<WatchEvent> {
         @Override
@@ -123,7 +125,7 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public void addListener(byte[] key, WatchListener listener, boolean prefix) {
-        if(prefix)
+        if (prefix)
             this.prefixListeners.put(key, listener);
         else
             this.listeners.put(key, listener);
@@ -153,10 +155,10 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public boolean isWatched(byte[] key) {
-        if(listeners.containsKey(key))
+        if (listeners.containsKey(key))
             return true;
         for (byte[] k : prefixListeners.keySet()) {
-            if(BytesUtil.isPrefix(key, k))
+            if (BytesUtil.isPrefix(key, k))
                 return true;
         }
         return false;
@@ -166,12 +168,12 @@ public class WatchServiceImpl implements WatchService {
     public Set<byte[]> getWatchedKeys(List<byte[]> keys) {
         Set<byte[]> watchedKeys = new HashSet<>();
         for (byte[] key : keys) {
-            if(listeners.containsKey(key)) {
+            if (listeners.containsKey(key)) {
                 watchedKeys.add(key);
                 continue;
             }
             for (byte[] prefixKey : prefixListeners.keySet()) {
-                if(BytesUtil.isPrefix(key, prefixKey)){
+                if (BytesUtil.isPrefix(key, prefixKey)) {
                     watchedKeys.add(key);
                     break;
                 }
@@ -298,7 +300,7 @@ public class WatchServiceImpl implements WatchService {
 
     public void writeToFile(File file) throws Exception {
         try (final FileOutputStream out = new FileOutputStream(file);
-             final BufferedOutputStream bufOutput = new BufferedOutputStream(out)) {
+                final BufferedOutputStream bufOutput = new BufferedOutputStream(out)) {
             // write listener
             final byte[] bytes = this.serializer.writeObject(this.listeners);
             final byte[] lenBytes = new byte[4];
@@ -323,7 +325,7 @@ public class WatchServiceImpl implements WatchService {
             throw new NoSuchFieldException(file.getPath());
         }
         try (final FileInputStream in = new FileInputStream(file);
-             final BufferedInputStream bufInput = new BufferedInputStream(in)) {
+                final BufferedInputStream bufInput = new BufferedInputStream(in)) {
 
             // read listener
             final byte[] lenBytes = new byte[4];
@@ -339,23 +341,25 @@ public class WatchServiceImpl implements WatchService {
                 throw new IOException("fail to read snapshot file, expects " + bytes.length + " bytes, but read "
                                       + read);
             }
-            this.listeners = this.serializer.readObject(bytes, (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
+            this.listeners = this.serializer.readObject(bytes,
+                (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
 
             // read prefix listener
             final byte[] lenBytes2 = new byte[4];
             int read2 = bufInput.read(lenBytes2);
             if (read2 != lenBytes2.length) {
                 throw new IOException("fail to read snapshot file length, expects " + lenBytes2.length
-                        + " bytes, but read " + read2);
+                                      + " bytes, but read " + read2);
             }
             final int len2 = Bits.getInt(lenBytes2, 0);
             final byte[] bytes2 = new byte[len2];
             read2 = bufInput.read(bytes2);
             if (read2 != bytes2.length) {
                 throw new IOException("fail to read snapshot file, expects " + bytes2.length + " bytes, but read "
-                        + read2);
+                                      + read2);
             }
-            this.prefixListeners = this.serializer.readObject(bytes2, (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
+            this.prefixListeners = this.serializer.readObject(bytes2,
+                (new ConcurrentSkipListMap<byte[], WatchListener>()).getClass());
         }
     }
 }

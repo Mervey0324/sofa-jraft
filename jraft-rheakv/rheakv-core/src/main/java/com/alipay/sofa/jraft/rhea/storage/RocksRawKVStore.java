@@ -475,11 +475,11 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
-            if(watchService.isWatched(key)) {   // append watch event
+            if (watchService.isWatched(key)) { // append watch event
                 byte[] preVal = this.db.get(key);
                 this.db.put(this.writeOptions, key, value);
                 this.watchService.appendEvent(new WatchEvent(key, preVal, value, EventType.PUT));
-            }else{
+            } else {
                 this.db.put(this.writeOptions, key, value);
             }
             setSuccess(closure, Boolean.TRUE);
@@ -689,12 +689,12 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
-            if(watchService.isWatched(key)) {
+            if (watchService.isWatched(key)) {
                 byte[] preVal = this.db.get(key);
                 this.db.merge(this.writeOptions, key, value);
                 byte[] curVal = this.db.get(key);
                 this.watchService.appendEvent(new WatchEvent(key, preVal, curVal, EventType.PUT));
-            }else{
+            } else {
                 this.db.merge(this.writeOptions, key, value);
             }
             setSuccess(closure, Boolean.TRUE);
@@ -1165,12 +1165,12 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
         final Lock readLock = this.readWriteLock.readLock();
         readLock.lock();
         try {
-            if(watchService.isWatched(key)) {
+            if (watchService.isWatched(key)) {
                 byte[] preVal = this.db.get(key);
                 this.db.delete(this.writeOptions, key);
-                if(preVal != null)
+                if (preVal != null)
                     this.watchService.appendEvent(new WatchEvent(key, preVal, null, EventType.DELETE));
-            }else{
+            } else {
                 this.db.delete(this.writeOptions, key);
             }
             setSuccess(closure, Boolean.TRUE);
@@ -1234,7 +1234,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             RocksIterator iterator = this.db.newIterator();
             iterator.seek(startKey);
             while (BytesUtil.compare(startKey, iterator.key()) <= 0 && BytesUtil.compare(endKey, iterator.key()) > 0) {
-                if(watchService.isWatched(iterator.key()))
+                if (watchService.isWatched(iterator.key()))
                     events.add(new WatchEvent(iterator.key(), iterator.value(), null, EventType.DELETE));
                 iterator.next();
             }
@@ -1261,7 +1261,7 @@ public class RocksRawKVStore extends BatchRawKVStore<RocksDBOptions> implements 
             Map<byte[], byte[]> preValMap = this.db.multiGet(keys);
             for (final byte[] key : keys) {
                 batch.delete(key);
-                if(preValMap.get(key) != null)
+                if (preValMap.get(key) != null)
                     events.add(new WatchEvent(key, preValMap.get(key), null, EventType.DELETE));
             }
             this.db.write(this.writeOptions, batch);

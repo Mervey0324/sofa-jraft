@@ -1491,22 +1491,22 @@ public class DefaultRheaKVStore implements RheaKVStore {
     }
 
     @Override
-    public Boolean bWatch(final String key, final WatchListener listener, boolean prefix){
+    public Boolean bWatch(final String key, final WatchListener listener, boolean prefix) {
         return FutureHelper.get(watch(key, listener, prefix), this.futureTimeoutMillis);
     }
 
     @Override
-    public Boolean bWatch(final byte[] key, final WatchListener listener, boolean prefix){
+    public Boolean bWatch(final byte[] key, final WatchListener listener, boolean prefix) {
         return FutureHelper.get(watch(key, listener, prefix), this.futureTimeoutMillis);
     }
 
     @Override
-    public CompletableFuture<Boolean> watch(final String key, final WatchListener listener, boolean prefix){
+    public CompletableFuture<Boolean> watch(final String key, final WatchListener listener, boolean prefix) {
         return watch(BytesUtil.writeUtf8(key), listener, prefix);
     }
 
     @Override
-    public CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener, boolean prefix){
+    public CompletableFuture<Boolean> watch(final byte[] key, final WatchListener listener, boolean prefix) {
         Requires.requireNonNull(key, "key");
         Requires.requireNonNull(listener, "listener");
         return watch(key, listener, prefix, new CompletableFuture<>(), false);
@@ -1520,16 +1520,15 @@ public class DefaultRheaKVStore implements RheaKVStore {
     }
 
     private void internalWatch(final byte[] key, final WatchListener listener, boolean prefix,
-                                    final CompletableFuture<Boolean> future,
-                                    final int retriesLeft, final Errors lastCause) {
-//        final RetryRunner retryRunner = retryCause -> internalWatchLocal(key, listener, future, retriesLeft - 1,
-//                retryCause);
+                               final CompletableFuture<Boolean> future, final int retriesLeft, final Errors lastCause) {
+        //        final RetryRunner retryRunner = retryCause -> internalWatchLocal(key, listener, future, retriesLeft - 1,
+        //                retryCause);
         final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, 0, null);
         Status status = Status.OK();
         Errors error = Errors.WATCH_ERROR;
         int retry = retriesLeft;
-        while(retry > 0){
-            try{
+        while (retry > 0) {
+            try {
                 this.storeEngine.getWatchService().addListener(key, listener, prefix);
                 closure.setData(Boolean.TRUE);
                 closure.run(Status.OK());
@@ -1574,10 +1573,10 @@ public class DefaultRheaKVStore implements RheaKVStore {
         return future;
     }
 
-    private void internalUnwatch(final byte[] key, final CompletableFuture<Boolean> future,
-                                    final int retriesLeft, final Errors lastCause) {
-//        final RetryRunner retryRunner = retryCause -> internalUnwatchLocal(key, future, retriesLeft - 1,
-//                retryCause);
+    private void internalUnwatch(final byte[] key, final CompletableFuture<Boolean> future, final int retriesLeft,
+                                 final Errors lastCause) {
+        //        final RetryRunner retryRunner = retryCause -> internalUnwatchLocal(key, future, retriesLeft - 1,
+        //                retryCause);
         final FailoverClosure<Boolean> closure = new FailoverClosureImpl<>(future, 0, null);
         Status status = Status.OK();
         Errors error = Errors.UNWATCH_ERROR;

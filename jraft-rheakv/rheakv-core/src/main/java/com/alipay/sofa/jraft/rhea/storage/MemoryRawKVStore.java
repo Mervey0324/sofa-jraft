@@ -656,7 +656,7 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             byte[] preVal = this.defaultDB.remove(key);
 
             // append watch event
-            if(preVal != null)
+            if (preVal != null)
                 this.watchService.appendEvent(new WatchEvent(key, preVal, null, EventType.DELETE));
 
             setSuccess(closure, Boolean.TRUE);
@@ -699,7 +699,7 @@ public class MemoryRawKVStore extends BatchRawKVStore<MemoryDBOptions> {
             List<WatchEvent> events = new ArrayList<>();
             for (final byte[] key : keys) {
                 byte[] preVal = this.defaultDB.remove(key);
-                if(preVal != null)
+                if (preVal != null)
                     events.add(new WatchEvent(key, preVal, null, EventType.DELETE));
             }
             this.watchService.appendEvents(events);
