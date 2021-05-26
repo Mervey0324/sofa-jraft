@@ -1229,6 +1229,17 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
         return keys;
     }
 
+    private List<byte[]> getPrefixWatchKeys() {
+        List<byte[]> keys = new ArrayList<>();
+        keys.add(makeKey("put"));
+        keys.add(makeKey("k"));
+        keys.add(makeKey("u"));
+        keys.add(makeKey("batch"));
+        keys.add(makeKey("del"));
+        keys.add(makeKey("g"));
+        return keys;
+    }
+
     private void putAndDelete() {
         // put test
         putByLeaderTest();
@@ -1270,19 +1281,29 @@ public abstract class AbstractRheaKVStoreTest extends RheaKVTestCluster {
         };
 
         WatchListener listener1 = new WatchListenerImpl();
+        WatchListener listener2 = new WatchListenerImpl();
 
         /********************** watch keys **********************/
         List<byte[]> keys = getWatchKeys();
         keys.forEach(k -> store.bWatch(k, listener1));
         System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>keys watched<<<<<<<<<<<<<<<<<<<<<<");
 
+        /********************** watch prefix keys **********************/
+        List<byte[]> prefixKeys = getPrefixWatchKeys();
+        prefixKeys.forEach(k -> store.bWatch(k, listener2, true));
+        System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>keys watched<<<<<<<<<<<<<<<<<<<<<<");
+
         putAndDelete();
 
         /********************** unwatch keys **********************/
         keys.forEach(store::bUnwatch);
+        prefixKeys.forEach(store::bUnwatch);
         System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>keys unwatched<<<<<<<<<<<<<<<<<<<<<<");
 
         putAndDelete();
+
+        System.out.println(listener1.toString());
+        System.out.println(listener2.toString());
     }
 
     @Test

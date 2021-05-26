@@ -35,7 +35,6 @@ import com.alipay.sofa.jraft.rhea.util.ByteArray;
 import com.alipay.sofa.jraft.rhea.util.Pair;
 import com.alipay.sofa.jraft.rhea.util.RegionHelper;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
-import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import com.alipay.sofa.jraft.util.Bits;
 
 import static com.alipay.sofa.jraft.entity.LocalFileMetaOutter.LocalFileMeta;

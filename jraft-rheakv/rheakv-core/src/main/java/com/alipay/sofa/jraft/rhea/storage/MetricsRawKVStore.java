@@ -19,10 +19,7 @@ package com.alipay.sofa.jraft.rhea.storage;
 import java.util.List;
 
 import com.alipay.sofa.jraft.rhea.metrics.KVMetrics;
-import com.alipay.sofa.jraft.rhea.serialization.Serializers;
 import com.alipay.sofa.jraft.rhea.util.concurrent.DistributedLock;
-import com.alipay.sofa.jraft.rhea.watch.WatchEntry;
-import com.alipay.sofa.jraft.rhea.watch.WatchListener;
 import com.codahale.metrics.Timer;
 
 import static com.alipay.sofa.jraft.rhea.metrics.KVMetricNames.RPC_REQUEST_HANDLE_TIMER;
@@ -242,18 +239,6 @@ public class MetricsRawKVStore implements RawKVStore {
     public void delete(final List<byte[]> keys, final KVStoreClosure closure) {
         final KVStoreClosure c = metricsAdapter(closure, DELETE_LIST, keys.size(), 0);
         this.rawKVStore.delete(keys, c);
-    }
-
-    @Override
-    public void watch(byte[] key, WatchListener listener, KVStoreClosure closure) {
-        final KVStoreClosure c = metricsAdapter(closure, WATCH, 1, key.length);
-        this.rawKVStore.watch(key, listener, c);
-    }
-
-    @Override
-    public void unwatch(byte[] key, KVStoreClosure closure) {
-        final KVStoreClosure c = metricsAdapter(closure, UNWATCH, 1, key.length);
-        this.rawKVStore.unwatch(key, c);
     }
 
     @Override

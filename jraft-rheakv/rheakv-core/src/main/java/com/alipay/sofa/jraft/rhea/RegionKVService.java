@@ -150,10 +150,4 @@ public interface RegionKVService {
      */
     void handleCompareAndPutAll(final CASAllRequest request,
                                 final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure);
-
-    void handleWatchRequest(final WatchRequest request,
-                            final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure);
-
-    void handleUnwatchRequest(final UnwatchRequest request,
-                              final RequestProcessClosure<BaseRequest, BaseResponse<?>> closure);
 }

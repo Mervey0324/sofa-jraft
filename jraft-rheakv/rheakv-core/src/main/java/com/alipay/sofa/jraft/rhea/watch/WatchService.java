@@ -19,16 +19,15 @@ package com.alipay.sofa.jraft.rhea.watch;
 import com.alipay.sofa.jraft.Lifecycle;
 import com.alipay.sofa.jraft.rhea.options.WatchOptions;
 
-import java.io.File;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 public interface WatchService extends Lifecycle<WatchOptions> {
     // listener api
-    void addListener(byte[] key, WatchListener listener);
-    void addListeners(Map<byte[], WatchListener> listeners);
+    void addListener(byte[] key, WatchListener listener, boolean prefix);
+    void addListeners(List<AddListener> listeners);
     void removeListener(byte[] key);
-    Map<byte[], WatchListener> getListeners();
+    void removeListeners();
 
     // append event
     void appendEvent(WatchEvent event);
@@ -40,6 +39,7 @@ public interface WatchService extends Lifecycle<WatchOptions> {
 
     // watch
     boolean isWatched(byte[] key);
+    Set<byte[]> getWatchedKeys(List<byte[]> keys);
 
     // other
     void join() throws InterruptedException;

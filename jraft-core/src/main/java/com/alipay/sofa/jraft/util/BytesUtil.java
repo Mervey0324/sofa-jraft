@@ -95,6 +95,17 @@ public final class BytesUtil {
         return getDefaultByteArrayComparator().compare(a, b);
     }
 
+    public static boolean isPrefix(final byte[] target, final byte[] prefix) {
+        if(prefix.length > target.length)
+            return false;
+        for (int i = 0; i < prefix.length; i++) {
+            if(prefix[i] != target[i])
+                return false;
+        }
+        return true;
+    }
+
+
     public static byte[] max(final byte[] a, final byte[] b) {
         return getDefaultByteArrayComparator().compare(a, b) > 0 ? a : b;
     }
