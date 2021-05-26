@@ -2,9 +2,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.alipay.sofa</groupId>
+    <groupId>io.github.mervey0324</groupId>
     <artifactId>jraft-parent</artifactId>
-    <version>1.3.6</version>
+    <version>1.3.6-mt-0.1</version>
     <packaging>pom</packaging>
 
     <name>${project.groupId}:${project.artifactId}</name>
@@ -20,16 +20,16 @@
 
     <developers>
         <developer>
-            <name>boyan</name>
-            <email>boyan@antfin.com</email>
-            <organization>Ant Financial</organization>
-            <organizationUrl>https://www.alipay.com/</organizationUrl>
+            <name>zhaolong</name>
+            <email>zhaolong.324@meituan.com</email>
+            <organization>Data Performance</organization>
+            <organizationUrl>https://www.sankuai.com/</organizationUrl>
         </developer>
         <developer>
-            <name>jiachun</name>
-            <email>jiachun.fjc@alibaba-inc.com</email>
-            <organization>Ant Financial</organization>
-            <organizationUrl>https://www.alipay.com/</organizationUrl>
+            <name>zhuwenyan</name>
+            <email>zhuwenyan02@meituan.com</email>
+            <organization>Data Performance</organization>
+            <organizationUrl>https://www.sankuai.com/</organizationUrl>
         </developer>
     </developers>
 
@@ -42,9 +42,9 @@
     </modules>
 
     <scm>
-        <connection>scm:git:git://github.com/alipay/sofa-jraft.git</connection>
-        <developerConnection>scm:git:ssh://github.com/alipay/sofa-jraft.git</developerConnection>
-        <url>http://github.com/alipay/sofa-jraft/tree/master</url>
+        <connection>scm:git:git://github.com/Mervey0324/sofa-jraft.git</connection>
+        <developerConnection>scm:git:ssh://github.com/Mervey0324/sofa-jraft.git</developerConnection>
+        <url>https://github.com/Mervey0324/sofa-jraft/tree/add_watch_feature</url>
     </scm>
 
     <properties>
@@ -370,7 +370,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>2.0.2</version>
+                <version>2.2.1</version>
                 <executions>
                     <execution>
                         <id>attach-sources</id>
@@ -498,7 +498,7 @@
                         <extensions>true</extensions>
                         <configuration>
                             <serverId>ossrh</serverId>
-                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                            <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
                             <autoReleaseAfterClose>false</autoReleaseAfterClose>
                         </configuration>
                     </plugin>
@@ -521,11 +521,11 @@
             <distributionManagement>
                 <repository>
                     <id>ossrh</id>
-                    <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+                    <url>https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/</url>
                 </repository>
                 <snapshotRepository>
                     <id>ossrh</id>
-                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+                    <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
                 </snapshotRepository>
             </distributionManagement>
         </profile>
