@@ -32,6 +32,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Collectors;
 
 public class WatchServiceImpl implements WatchService {
 
@@ -61,19 +62,16 @@ public class WatchServiceImpl implements WatchService {
     private class WatchEventHandler implements EventHandler<WatchEvent> {
         @Override
         public void onEvent(WatchEvent event, long sequence, boolean endOfBatch) throws Exception {
+
             LOG.info(">>>>>>>>> enter WatchEventHandler.onEvent");
-            Requires.requireNonNull(listeners, "listeners");
-            if (!listeners.isEmpty() && listeners.containsKey(event.getKey())) {
-                listeners.get(event.getKey()).onNext(event);
-                LOG.info(">>>>>>>>> execute listener onNext end.");
+
+            if(event.getShutdown() != null){
+                listeners.clear();
+                prefixListeners.clear();
+                event.getShutdown().countDown();
+                return;
             }
-            if (!prefixListeners.isEmpty()) {
-                prefixListeners.keySet().forEach(key -> {
-                    if(BytesUtil.isPrefix(event.getKey(), key))
-                        prefixListeners.get(key).onNext(event);
-                });
-                LOG.info(">>>>>>>>> execute prefix listener onNext end.");
-            }
+            executeEventOnNext(event);
         }
     }
 
@@ -112,7 +110,7 @@ public class WatchServiceImpl implements WatchService {
             return;
         }
         this.shutdownLatch = new CountDownLatch(1);
-        Utils.runInThread(() -> this.watchRingBuffer.publishEvent((event, sequence) -> {}));
+        Utils.runInThread(() -> this.watchRingBuffer.publishEvent((event, sequence) -> event.setShutdown(this.shutdownLatch)));
     }
 
     public void join() throws InterruptedException {
@@ -120,7 +118,37 @@ public class WatchServiceImpl implements WatchService {
             this.shutdownLatch.await();
         }
         this.watchDisruptor.shutdown();
-        listeners.clear();
+    }
+
+    private void executeEventOnNext(WatchEvent event){
+
+        if (!listeners.isEmpty() && listeners.containsKey(event.getKey())) {
+            listeners.get(event.getKey()).onNext(event);
+            LOG.info(">>>>>>>>> execute listener onNext end.");
+        }
+        if (!prefixListeners.isEmpty()) {
+            prefixListeners.keySet().forEach(key -> {
+                if(BytesUtil.isPrefix(event.getKey(), key))
+                    prefixListeners.get(key).onNext(event);
+            });
+            LOG.info(">>>>>>>>> execute prefix listener onNext end.");
+        }
+    }
+
+    private void executeEventOnError(WatchEvent event, Throwable throwable){
+
+        if (!listeners.isEmpty() && listeners.containsKey(event.getKey())) {
+            listeners.get(event.getKey()).onError(throwable);
+            LOG.info(">>>>>>>>> execute listener onError end.");
+        }
+
+        if (!prefixListeners.isEmpty()) {
+            prefixListeners.keySet().forEach(key -> {
+                if(BytesUtil.isPrefix(event.getKey(), key))
+                    prefixListeners.get(key).onError(throwable);
+            });
+            LOG.info(">>>>>>>>> execute prefix listener onError end.");
+        }
     }
 
     @Override
@@ -184,17 +212,13 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public void appendEvent(WatchEvent event) {
-        LOG.info("append watch event, event is {}", event);
+        LOG.debug("append watch event, event is {}", event);
 
         if (this.shutdownLatch != null) {
-            IllegalStateException e = new IllegalStateException("Service already shutdown.");
-            if (listeners.containsKey(event.getKey())) {
-                listeners.get(event.getKey()).onError(e);
-            }
-            prefixListeners.keySet().forEach(key -> {
-                if(BytesUtil.isPrefix(event.getKey(), key))
-                    prefixListeners.get(key).onError(e);
-            });
+            LOG.warn("Watch service already shutdown, event is ignored! event is {}", event);
+            IllegalStateException e = new IllegalStateException("Watch service already shutdown.");
+//            executeEventOnError(event, e);
+            throw e;
         }
 
         try {
@@ -217,31 +241,24 @@ public class WatchServiceImpl implements WatchService {
                 }
             }
         } catch (final Exception e) {
-            if (listeners.containsKey(event.getKey())) {
-                listeners.get(event.getKey()).onError(e);
-            }
+            executeEventOnError(event, e);
         }
     }
 
     @Override
     public void appendEvents(List<WatchEvent> events) {
         LOG.info("append watch events, events is {}", events);
-        Set<byte[]> keys = new HashSet<>();
-        events.forEach(event -> keys.add(event.getKey()));
 
         if (this.shutdownLatch != null) {
-            IllegalStateException e = new IllegalStateException("Service already shutdown.");
-            keys.forEach(key -> {
-                if (listeners.containsKey(key)) {
-                    listeners.get(key).onError(e);
-                }
-            });
+            IllegalStateException e = new IllegalStateException("Watch service already shutdown.");
+//            events.forEach(event -> executeEventOnError(event, e));
+            throw e;
         }
-        List<WatchEvent> validEvents = new ArrayList<>();
-        for (WatchEvent event : events) {
-            if(this.listeners.containsKey(event.getKey()))
-                validEvents.add(event);
-        }
+
+        List<WatchEvent> validEvents = events.stream()
+                .filter(event -> isWatched(event.getKey()))
+                .collect(Collectors.toList());
+
         if(!validEvents.isEmpty()) {
             try {
                 List<EventTranslator<WatchEvent>> translators = new ArrayList<>();
@@ -267,11 +284,7 @@ public class WatchServiceImpl implements WatchService {
                     }
                 }
             } catch (final Exception e) {
-                keys.forEach(key -> {
-                    if (listeners.containsKey(key)) {
-                        listeners.get(key).onError(e);
-                    }
-                });
+                events.forEach(event -> executeEventOnError(event, e));
             }
         }
     }
