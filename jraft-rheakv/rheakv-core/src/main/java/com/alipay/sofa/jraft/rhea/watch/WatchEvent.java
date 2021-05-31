@@ -30,11 +30,18 @@ import java.util.concurrent.CountDownLatch;
 @AllArgsConstructor
 @NoArgsConstructor
 public class WatchEvent {
-    private byte[]    key;
-    private byte[]    preValue;
-    private byte[]    value;
-    private EventType eventType;
+    private byte[]         key;
+    private byte[]         preValue;
+    private byte[]         value;
+    private EventType      eventType;
     private CountDownLatch shutdown;
+
+    public WatchEvent(byte[] key, byte[] preValue, byte[] value, EventType eventType) {
+        this.key = key;
+        this.preValue = preValue;
+        this.value = value;
+        this.eventType = eventType;
+    }
 
     @Override
     public String toString() {
