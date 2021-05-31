@@ -65,7 +65,7 @@ public class WatchServiceImpl implements WatchService {
 
             LOG.info(">>>>>>>>> enter WatchEventHandler.onEvent");
 
-            if(event.getShutdown() != null){
+            if (event.getShutdown() != null) {
                 listeners.clear();
                 prefixListeners.clear();
                 event.getShutdown().countDown();
