@@ -34,6 +34,7 @@ public class WatchEvent {
     private byte[]    preValue;
     private byte[]    value;
     private EventType eventType;
+    private CountDownLatch shutdown;
 
     @Override
     public String toString() {
