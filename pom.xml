@@ -4,7 +4,7 @@
 
     <groupId>io.github.mervey0324</groupId>
     <artifactId>jraft-parent</artifactId>
-    <version>1.3.6-mt-0.2</version>
+    <version>1.3.6-mt-0.3</version>
     <packaging>pom</packaging>
 
     <name>${project.groupId}:${project.artifactId}</name>
