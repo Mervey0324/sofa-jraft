@@ -4,8 +4,8 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <artifactId>jraft-parent</artifactId>
-        <groupId>com.alipay.sofa</groupId>
-        <version>1.3.6</version>
+        <groupId>io.github.mervey0324</groupId>
+        <version>1.3.6-mt-0.1</version>
     </parent>
     <artifactId>jraft-core</artifactId>
     <packaging>jar</packaging>

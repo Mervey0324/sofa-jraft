@@ -38,11 +38,8 @@ public class WatchEvent {
 
     @Override
     public String toString() {
-        return "WatchEvent{" +
-                "key=" + BytesUtil.readUtf8(key) +
-                ", preValue=" + preValue == null ?"null":BytesUtil.readUtf8(preValue) +
-                ", value=" + value == null ?"null":BytesUtil.readUtf8(value) +
-                ", eventType=" + eventType +
-                '}';
+        return "WatchEvent{" + "key=" + BytesUtil.readUtf8(key) + ", preValue=" + preValue == null ? "null" : BytesUtil
+            .readUtf8(preValue) + ", value=" + value == null ? "null" : BytesUtil.readUtf8(value) + ", eventType="
+                                                                        + eventType + '}';
     }
 }
