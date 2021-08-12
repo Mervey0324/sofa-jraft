@@ -212,7 +212,7 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public void appendEvent(WatchEvent event) {
-        LOG.debug("append watch event, event is {}", event);
+//        LOG.debug("append watch event, event is {}", event);
 
         if (this.shutdownLatch != null) {
             LOG.warn("Watch service already shutdown, event is ignored! event is {}", event);
@@ -247,7 +247,7 @@ public class WatchServiceImpl implements WatchService {
 
     @Override
     public void appendEvents(List<WatchEvent> events) {
-        LOG.info("append watch events, events is {}", events);
+//        LOG.debug("append watch events, events is {}", events);
 
         if (this.shutdownLatch != null) {
             IllegalStateException e = new IllegalStateException("Watch service already shutdown.");
